@@ -1,21 +1,24 @@
+#include <fcntl.h>
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <getopt.h>
-
 int main(int argc, char *argv[]) {
   int infile = STDIN_FILENO;
   int outfile = STDOUT_FILENO;
-  int buffer[100];
   int length = atoi(argv[1]);
-  printf("%d" , length);
-  int opt;
+  char buffer[length];
+  int n = 0;
 
-  while((opt = getopt(argc, argv,"")) !=EOF) {
-    
-  int n = read(infile, buffer,100);
-}
+  for (int i = 2; i < argc; i++) {
 
-  
-  printf("Hello!\n");
+    infile = open(argv[i], O_RDONLY | O_CREAT);
+
+    n = read(infile, buffer, length);
+
+    buffer[n] = '\0';
+    write(outfile, buffer, n);
+  }
+  printf("\n");
+  close(infile);
 }
