@@ -1,5 +1,6 @@
 CFLAGS = -Wall -std=c11
 CC = clang $(CFLAGS)
+MEMCHECK = valgrind --leak-check=full
 
 all		:	shoulders
 
@@ -10,7 +11,14 @@ shoulders.o	:	shoulders.c
 		$(CC) -c shoulders.c
 
 clean		:
-		rm -rf *.o shoulders
+		rm -rf *.o shoulders infer-out
 
 format		:
-		clang-format -i -style=file *.c
+		clang-format -i -style=file *.c 
+
+infer		:
+		make clean; infer-capture -- make; infer-analyze -- make
+
+valgrind	:
+		valgrind --leak-check=full shoulders
+
