@@ -1,3 +1,4 @@
+#include <err.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -20,18 +21,21 @@ int main(int argc, char *argv[]) {
     for (int i = 2; i < argc; i++) {
       if (strcmp(argv[i], "-") == 0) {
         n = read(STDIN_FILENO, buffer, length);
-        if (n == -1)
-          perror("FILE EMPTY");
       } else {
 
         infile = open(argv[i], O_RDONLY | O_CREAT);
+        if (infile == -1) {
+          err(EXIT_FAILURE, "Error on opening file%s", argv[i]);
+          return -1;
+        }
         n = read(infile, buffer, length);
         buffer[n] = '\0';
       }
       write(outfile, buffer, n);
       close(infile);
-    } 
+    }
   }
   printf("\n");
-  close(infile);
+  // close(infile);
+  return 0;
 }
