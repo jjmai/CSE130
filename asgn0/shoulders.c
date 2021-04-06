@@ -8,9 +8,15 @@
 int main(int argc, char *argv[]) {
   int infile = STDIN_FILENO;
   int outfile = STDOUT_FILENO;
+  int n = 0;
+  if (argc < 2) {
+    fprintf(stderr,"Error, no arugments detected\n");
+    //err(EXIT_FAILURE, "Error, no arguments");
+    return -1;
+  }
   int length = atoi(argv[1]);
   char buffer[length];
-  int n = 0;
+
   // Base Case for no arguments input
   if (argc == 2) {
     n = read(infile, buffer, length);
@@ -35,7 +41,7 @@ int main(int argc, char *argv[]) {
       close(infile);
     }
   }
-  printf("\n");
+  //  printf("\n");
   // close(infile);
   return 0;
 }
