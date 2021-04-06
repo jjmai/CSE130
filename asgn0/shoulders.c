@@ -10,12 +10,14 @@ int main(int argc, char *argv[]) {
   int outfile = STDOUT_FILENO;
   int n = 0;
   if (argc < 2) {
-    fprintf(stderr,"Error, no arugments detected\n");
-    //err(EXIT_FAILURE, "Error, no arguments");
+    fprintf(stderr, "Error, no arugments detected\n");
+    // err(EXIT_FAILURE, "Error, no arguments");
     return -1;
   }
   int length = atoi(argv[1]);
   char buffer[length];
+  // char buffer_write[length * argc];
+  // int count = 0;
 
   // Base Case for no arguments input
   if (argc == 2) {
@@ -27,6 +29,7 @@ int main(int argc, char *argv[]) {
     for (int i = 2; i < argc; i++) {
       if (strcmp(argv[i], "-") == 0) {
         n = read(STDIN_FILENO, buffer, length);
+        buffer[n]='\0';
       } else {
 
         infile = open(argv[i], O_RDONLY | O_CREAT);
@@ -35,13 +38,13 @@ int main(int argc, char *argv[]) {
           return -1;
         }
         n = read(infile, buffer, length);
+        //  count += n;
         buffer[n] = '\0';
       }
       write(outfile, buffer, n);
       close(infile);
     }
   }
-  //  printf("\n");
-  // close(infile);
+  // write(outfile, buffer, count);
   return 0;
 }
