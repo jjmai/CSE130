@@ -1,6 +1,6 @@
 # ----------------------------------------------
 # Jordan Mai, jmai12
-# CSE10 Spring 2021, asgn0
+# CSE130 Spring 2021, asgn0
 #
 # Makefile for shoulders program
 #

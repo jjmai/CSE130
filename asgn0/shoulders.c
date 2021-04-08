@@ -9,15 +9,14 @@ int main(int argc, char *argv[]) {
   int infile = STDIN_FILENO;
   int outfile = STDOUT_FILENO;
   int n = 0;
+
+  // error message for missing arguments
   if (argc < 2) {
-    fprintf(stderr, "Error, no arugments detected\n");
-    // err(EXIT_FAILURE, "Error, no arguments");
+    fprintf(stderr, "Error, no arugment for number of bytes detected\n");
     return -1;
   }
   int length = atoi(argv[1]);
   char buffer[length];
-  //char buffer_write[100];
-  //int count = 0;
 
   // Base Case for no arguments input
   if (argc == 2) {
@@ -33,7 +32,8 @@ int main(int argc, char *argv[]) {
       } else {
 
         infile = open(argv[i], O_RDWR | O_CREAT);
-        if (infile == -1) {
+        // corrupted file
+        if (infile < 0) {
           err(EXIT_FAILURE, "Error on opening file%s", argv[i]);
           return -1;
         }
@@ -44,6 +44,6 @@ int main(int argc, char *argv[]) {
       close(infile);
     }
   }
-  //write(outfile, buffer_write, count);
+
   return 0;
 }
