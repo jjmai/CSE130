@@ -31,10 +31,10 @@ int main(int argc, char *argv[]) {
         buffer[n] = '\0';
       } else {
 
-        infile = open(argv[i], O_RDWR | O_CREAT);
-        // corrupted file
+        infile = open(argv[i], O_RDWR);
+        // files dont exist
         if (infile < 0) {
-          err(EXIT_FAILURE, "Error on opening file%s", argv[i]);
+          err(EXIT_FAILURE, "Cannot open '%s'", argv[i]);
           return -1;
         }
         n = read(infile, buffer, length);
