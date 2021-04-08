@@ -1,7 +1,7 @@
-#---------------------------------------
-Jordan Mai, jmai12
-CSE130 Spring 2021, asgn0
-README.md
+# -------------------------------------
+# Jordan Mai
+# CSE130 Spring 3032, asgn0
+# README.md
 #---------------------------------------
 
 #PROGRAM
@@ -17,5 +17,7 @@ Makefile - instructions for compiling
 #INSTRUCTION
 
 To compile the program, type 'make'
+
 To run the program type, ./shoulders [# of bytes (integer)] [file or '-' for stdin ]
+
 Expected output will be in stdout.
