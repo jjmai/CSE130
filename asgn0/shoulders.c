@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
 
   // error message for missing arguments
   if (argc < 2) {
-    fprintf(stderr, "Error, no arugment for number of bytes detected\n");
+    fprintf(stderr, "Error, no argument for number of bytes detected\n");
     return -1;
   }
   int length = atoi(argv[1]);
@@ -44,6 +44,5 @@ int main(int argc, char *argv[]) {
       close(infile);
     }
   }
-
   return 0;
 }
