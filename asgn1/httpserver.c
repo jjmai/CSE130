@@ -1,12 +1,12 @@
+#include <arpa/inet.h>
 #include <err.h>
+#include <netinet/in.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
-#include <stdio.h>
+#include <unistd.h>
 /**
    Converts a string to an 16 bits unsigned integer.
    Returns 0 if the string is malformed or out of the range.
@@ -35,7 +35,7 @@ int create_listen_socket(uint16_t port) {
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htons(INADDR_ANY);
   addr.sin_port = htons(port);
-  if (bind(listenfd, (struct sockaddr*)&addr, sizeof addr) < 0) {
+  if (bind(listenfd, (struct sockaddr *)&addr, sizeof addr) < 0) {
     err(EXIT_FAILURE, "bind error");
   }
 
@@ -46,17 +46,28 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
-
+#define buffer_size 1024
 void handle_connection(int connfd) {
   // do something
   int infile = STDIN_FILENO;
   int outfile = STDOUT_FILENO;
-  int valread=0;
-  char buffer[1024];
-  printf("hey\n");  
-  valread = recv(connfd,buffer,5,0);
-  write(outfile,buffer,valread);
-  
+  int valread = 0;
+  char buffer[buffer_size];
+  char request[20];
+  char body[200];
+  char version[200];
+  while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
+    write(outfile, buffer, valread);
+
+    // if get received then send message
+    sscanf(buffer, "%s %s %s", request, body, version);
+    if (strcmp(request, "GET") == 0) {
+      printf("%s %s %s\n ", request, body, version);
+      dprintf(connfd, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+    }
+
+    write(outfile, "waiting:\n\n", strlen("witing\n"));
+  }
 
   // when done, close socket
   close(connfd);
@@ -74,8 +85,8 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "invalid port number: %s", argv[1]);
   }
   listenfd = create_listen_socket(port);
-  
-  while(1) {
+
+  while (1) {
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) {
       warn("accept error");
