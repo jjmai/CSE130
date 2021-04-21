@@ -46,27 +46,41 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
+void send_response(int connfd, char *version) {
+  dprintf(connfd, "%s 200 OK\r\n", version);
+}
+
 #define buffer_size 1024
 void handle_connection(int connfd) {
   // do something
   int infile = STDIN_FILENO;
   int outfile = STDOUT_FILENO;
   int valread = 0;
+  char read_buffer[buffer_size];
   char buffer[buffer_size];
   char request[20];
   char body[200];
   char version[200];
+  char content[200];
+
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     write(outfile, buffer, valread);
 
     // if get received then send message
-    sscanf(buffer, "%s %s %s", request, body, version);
+    sscanf(buffer, "%s %s %s ", request, body, version);
     if (strcmp(request, "GET") == 0) {
-      printf("%s %s %s\n ", request, body, version);
-      dprintf(connfd, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+      // sscanf agian and p;ug in gor 200
+      //  dprintf(connfd, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
+
+      send_response(connfd, version);
+    } else if (strcmp(request, "PUT") == 0) {
+      // print stuff
+      // write(outfile,buffer,valread);
+
+      dprintf(connfd, "%s 200 OK\r\n", version);
     }
 
-    write(outfile, "waiting:\n\n", strlen("witing\n"));
+    write(outfile, "waiting:\r\n", strlen("waiting\n"));
   }
 
   // when done, close socket
