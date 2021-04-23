@@ -50,13 +50,24 @@ int create_listen_socket(uint16_t port) {
 
 // (socket,request,file,version, bytes,code)
 void send_response(int connfd, char *request, char *body, char *version,
-                   int num) {
-  if (num == 1 && (strcmp(version, "GET") == 0)) {
-    dprintf(connfd, "%s 200 OK\r\n", version);
-  } else if (num == 2) {
-    dprintf(connfd, "%s 201 Created\r\n", version);
-  } else if (num == 5) {
-    dprintf(connfd, "%s 404 Not FOund\r\n", version);
+                   char *content, char *content_num, char *copy, char *buffer,
+                   int code) {
+  if (strcmp(request, "GET") == 0) {
+    if (code == 1) {
+      sprintf(copy, "%s 200 OK\r\n%s %s\r\n\r\n%s\n", version, content,
+              content_num, buffer);
+      send(connfd, copy, strlen(copy), 0);
+    }
+  } else if (strcmp(request, "PUT") == 0) {
+    if (code == 2) {
+      sprintf(copy, "%s 201 Created\r\n%s %s\r\n\r\n%s\n", version, content,
+              content_num, buffer);
+      send(connfd, copy, strlen(copy), 0);
+    } else if (code == 1) {
+      sprintf(copy, "%s 200 OK\r\n%s %s\r\n\r\n%s\n", version, content,
+              content_num, buffer);
+      send(connfd, copy, strlen(copy), 0);
+    }
   }
 }
 
@@ -77,6 +88,8 @@ void handle_connection(int connfd) {
   int fd = 0;
   char code[] = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nOK\n";
   char *p;
+  int write_len = 0, read_len = 0;
+
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     write(outfile, buffer, valread);
     // line by line
@@ -91,20 +104,14 @@ void handle_connection(int connfd) {
       if (fd < 0) {
         printf("file don't exist,creating one \n");
         fd = open(body, O_CREAT);
-        send_response(connfd, request, body, version, 2);
+        //   send_response(connfd, request, body, version, 2);
       } else {
-        int read_len = read(fd, read_buffer, sizeof(fd) + 1);
+        read_len = read(fd, read_buffer, sizeof(fd) + 1);
         read_buffer[read_len] = '\0';
         if (read_len > 0) {
-
-          // send(connfd,
-          sprintf(copy,
-                  "%s 200 OK\r\nContent-Length: "
-                  "%d\r\n\r\n%s",
-                  version, read_len, read_buffer);
+          send_response(connfd, request, body, version, content, content_num,
+                        copy, read_buffer, 1);
         }
-        send(connfd, copy, strlen(copy), 0);
-        // send(connfd, code,strlen(code),0);
       }
 
       // send_response(connfd, request, body, version, 1);
@@ -112,17 +119,27 @@ void handle_connection(int connfd) {
       memmove(&body[0], &body[1], strlen(body));
       fd = open(body, O_WRONLY);
       if (fd < 0) {
-        fd = open(body, O_CREAT | O_WRONLY);
-        int write_len = write(fd, read_buffer, atoi(content_num));
+        fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
+        write_len = write(fd, read_buffer, atoi(content_num));
         if (write_len > 0) {
-          sprintf(copy,"%s 201
+          send_response(connfd, request, body, version, content, content_num,
+                        copy, read_buffer, 2);
         }
-      }
-      // write(content, body, fd);
-    }
+      } else {
+        //	valread= recv(connfd,buffer,buffer_size,0);
+        printf("Hello\n");
+        valread = recv(connfd, read_buffer, buffer_size, 0);
 
-    printf("Waiting...\n");
+        // send(connfd,code,strlen(code),0);
+        write_len = write(fd, read_buffer, valread);
+        send_response(connfd, request, body, version, content, content_num,
+                      copy, read_buffer, 1);
+      }
+    }
   }
+
+  printf("Waiting...\n");
+
   // when done, close socket
   close(connfd);
 }
