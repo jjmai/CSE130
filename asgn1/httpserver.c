@@ -48,11 +48,36 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
+void send_get(int connfd, char *request, char *body, char *version) {
+  char copy[200];
+  char read_buffer[200];
+  int fd = 0, read_len = 0;
+
+  memmove(&body[0], &body[1], strlen(body));
+  fd = open(body, O_RDONLY);
+  if (fd < 0) {
+    // creat new file
+    fd = open(body, O_CREAT | O_RDWR | O_TRUNC);
+  } else {
+    read_len = read(fd, read_buffer, buffer_size);
+    read_buffer[read_len] = '\0';
+    if (read_len > 0) {
+      sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s\n", version,
+              read_len, read_buffer);
+      send(connfd, copy, strlen(copy), 0);
+    }
+  }
+}
+
 // (socket,request,file,version, bytes,code)
 void send_response(int connfd, char *request, char *body, char *version,
                    char *content, char *content_num, char *copy, char *buffer,
                    int code) {
   if (strcmp(request, "GET") == 0) {
+    if (code == 2) {
+      sprintf(copy, "%s 201 Created\r\n", version);
+      send(connfd, copy, strlen(copy), 0);
+    }
     if (code == 1) {
       sprintf(copy, "%s 200 OK\r\n%s %s\r\n\r\n%s\n", version, content,
               content_num, buffer);
@@ -92,30 +117,16 @@ void handle_connection(int connfd) {
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     write(outfile, buffer, valread);
-    // line by line
-
     sscanf(buffer, "%s %s %s ", request, body, version);
-    p = strstr(buffer, "Content");
-    sscanf(p, "%s %s", content, content_num);
 
     if (strcmp(request, "GET") == 0) {
-      memmove(&body[0], &body[1], strlen(body));
-      fd = open(body, O_RDONLY);
-      if (fd < 0) {
-        printf("file don't exist,creating one \n");
-        fd = open(body, O_CREAT);
-        //   send_response(connfd, request, body, version, 2);
-      } else {
-        read_len = read(fd, read_buffer, sizeof(fd) + 1);
-        read_buffer[read_len] = '\0';
-        if (read_len > 0) {
-          send_response(connfd, request, body, version, content, content_num,
-                        copy, read_buffer, 1);
-        }
-      }
+      send_get(connfd, request, body, version);
+      send(connfd, code, strlen(code), 0);
 
-      // send_response(connfd, request, body, version, 1);
     } else if (strcmp(request, "PUT") == 0) {
+      p = strstr(buffer, "Content");
+      sscanf(p, "%s %s", content, content_num);
+
       memmove(&body[0], &body[1], strlen(body));
       fd = open(body, O_WRONLY);
       if (fd < 0) {
@@ -126,8 +137,6 @@ void handle_connection(int connfd) {
                         copy, read_buffer, 2);
         }
       } else {
-        //	valread= recv(connfd,buffer,buffer_size,0);
-        printf("Hello\n");
         valread = recv(connfd, read_buffer, buffer_size, 0);
 
         // send(connfd,code,strlen(code),0);
