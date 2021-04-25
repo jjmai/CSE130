@@ -23,3 +23,9 @@ clean		:
 		rm -rf *.o httpserver
 format		:
 		clang-format -i -style=file *.c
+
+infer		:
+		make clean; infer-capture -- make; infer-analyze -- make
+
+valgrind	:
+		valgrind --leak-check=full httpserver
