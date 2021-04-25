@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 /**
    Converts a string to an 16 bits unsigned integer.
    Returns 0 if the string is malformed or out of the range.
@@ -90,9 +90,16 @@ void send_put(int connfd, char *request, char *body, char *version,
   char copy[1024];
   char read_buffer[1024];
   int fd = STDIN_FILENO;
-  int write_len = 0, valread = 0;
+  int write_len = 0, valread = 0, r = 0;
+  struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
+  r = stat(body, &fs);
+  if (r == -1) {
+    sprintf(copy, "%s 403 Forbidden\r\n", version);
+    send(connfd, copy, strlen(copy), 0);
+  }
+
   fd = open(body, O_WRONLY);
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
