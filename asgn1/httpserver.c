@@ -58,32 +58,36 @@ void send_get(int connfd, char *request, char *body, char *version) {
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
-  r = stat(body, &fs);
-  // no permission
-  if (r == -1) {
-    sprintf(copy, "%s 403 Forbidden\r\n\n", version);
-    send(connfd, copy, strlen(copy), 0);
-  }
 
   fd = open(body, O_RDONLY);
 
-  // create new file 201
+  // doesnt exist 404
   if (fd < 0) {
     sprintf(copy, "%s 404 Not Found\r\n\r\n", version);
     send(connfd, copy, strlen(copy), 0);
     close(connfd);
   } else {
-    read_len = read(fd, read_buffer, buffer_size);
-    read_buffer[read_len] = '\0';
-
-    if (read_len > 0) {
-      sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s", version,
-              read_len, read_buffer);
+    r = stat(body, &fs);
+    // no permission
+    if (r == -1) {
+      sprintf(copy, "%s 403 Forbidden\r\n\n", version);
       send(connfd, copy, strlen(copy), 0);
+      close(connfd);
     } else {
-      sprintf(copy, "%s 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
-              version);
-      send(connfd, copy, strlen(copy), 0);
+
+      read_len = read(fd, read_buffer, buffer_size);
+      read_buffer[read_len] = '\0';
+
+      if (read_len > 0) {
+        sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s", version,
+                read_len, read_buffer);
+        send(connfd, copy, strlen(copy), 0);
+      } else {
+        sprintf(copy,
+                "%s 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
+                version);
+        send(connfd, copy, strlen(copy), 0);
+      }
     }
   }
   close(fd);
@@ -99,32 +103,35 @@ void send_put(int connfd, char *request, char *body, char *version,
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
-  r = stat(body, &fs);
-  if (r == -1) {
-    sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 0\r\n\r\n", version);
-    send(connfd, copy, strlen(copy), 0);
-  }
+  //  int result = access(body,F_OK);
 
   fd = open(body, O_WRONLY | O_TRUNC);
   if (fd < 0) {
-    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
+    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
     // write_len = write(fd, read_buffer, atoi(content_num));
-
-    valread = recv(connfd, read_buffer, atoi(content_num), 0);
-    printf("%s - %d ", read_buffer, valread);
+    valread = recv(connfd, read_buffer, buffer_size, 0);
     // send(connfd,code,strlen(code),0);
     write_len = write(fd, read_buffer, valread);
+
     sprintf(copy, "%s 201 Created\r\n%s %d\r\n\r\n%s", version, content,
             write_len, read_buffer);
     send(connfd, copy, strlen(copy), 0);
 
   } else {
-    valread = recv(connfd, read_buffer, atoi(content_num), 0);
-    write_len = write(fd, read_buffer, valread);
+    r = stat(body, &fs);
+    if (r == -1) {
+      sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 0\r\n\r\n", version);
+      send(connfd, copy, strlen(copy), 0);
+      close(connfd);
+    } else {
 
-    sprintf(copy, "%s 200 OK\r\n%s %d\r\n\r\n%s", version, content, write_len,
-            read_buffer);
-    send(connfd, copy, strlen(copy), 0);
+      valread = recv(connfd, read_buffer, atoi(content_num), 0);
+      write_len = write(fd, read_buffer, valread);
+
+      sprintf(copy, "%s 200 OK\r\n%s %d\r\n\r\n%s", version, content, write_len,
+              read_buffer);
+      send(connfd, copy, strlen(copy), 0);
+    }
   }
   close(fd);
 }
@@ -133,7 +140,8 @@ void send_head(int connfd, char *request, char *body, char *version) {
   char read_buffer[1024];
   int infile = STDIN_FILENO;
   char copy[200];
-  int valread = 0;
+  int valread = 0, r = 0;
+  struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
   infile = open(body, O_RDONLY);
@@ -141,6 +149,13 @@ void send_head(int connfd, char *request, char *body, char *version) {
     valread = read(infile, read_buffer, buffer_size);
     sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
     send(connfd, copy, strlen(copy), 0);
+  } else {
+    r = stat(body, &fs);
+    if (r == -1) {
+      sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 0\r\n\r\n", version);
+      send(connfd, copy, strlen(copy), 0);
+      close(connfd);
+    }
   }
   close(infile);
 }
