@@ -96,8 +96,8 @@ void send_get(int connfd, char *request, char *body, char *version) {
 // (socket,request,file,version, bytes,code)
 void send_put(int connfd, char *request, char *body, char *version,
               char *content, char *content_num) {
-  char copy[buffer_size];
-  char read_buffer[buffer_size];
+  char copy[atoi(content_num) + 1];
+  char read_buffer[atoi(content_num) + 1];
   int fd = STDIN_FILENO;
   int write_len = 0, valread = 0, r = 0;
   struct stat fs;
@@ -108,10 +108,10 @@ void send_put(int connfd, char *request, char *body, char *version,
   fd = open(body, O_WRONLY | O_TRUNC);
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
-    // write_len = write(fd, read_buffer, atoi(content_num));
-    valread = recv(connfd, read_buffer, buffer_size, 0);
+    // while recv keep reading
+    valread = recv(connfd, read_buffer, atoi(content_num), 0);
     // send(connfd,code,strlen(code),0);
-    write_len = write(fd, read_buffer, valread);
+    write_len = write(fd, read_buffer, strlen(read_buffer));
 
     sprintf(copy, "%s 201 Created\r\n%s %d\r\n\r\n%s", version, content,
             write_len, read_buffer);
