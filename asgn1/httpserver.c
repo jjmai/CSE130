@@ -51,11 +51,15 @@ int create_listen_socket(uint16_t port) {
 
 #define buffer_size 4096
 void send_get(int connfd, char *request, char *body, char *version) {
-  char copy[buffer_size];
-  char read_buffer[buffer_size];
+  //char copy[buffer_size];
+ // char read_buffer[buffer_size];
+  char * copy;
+  char *read_buffer;
   int fd = STDIN_FILENO;
   int read_len = 0, r = 0;
   struct stat fs;
+  copy = (char *)malloc(buffer_size);
+  read_buffer=(char*)malloc(buffer_size);
 
   memmove(&body[0], &body[1], strlen(body));
 
@@ -74,10 +78,14 @@ void send_get(int connfd, char *request, char *body, char *version) {
       send(connfd, copy, strlen(copy), 0);
       close(connfd);
     } else {
+      int fsize = fs.st_size;
+      if(fsize > buffer_size) {
+	read_buffer = (char*)realloc(read_buffer,fsize);
+	copy = (char *)realloc(copy,fsize);
+      }
 
-      read_len = read(fd, read_buffer, buffer_size);
+      read_len = read(fd, read_buffer, fsize);
       read_buffer[read_len] = '\0';
-
       if (read_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s", version,
                 read_len, read_buffer);
@@ -91,6 +99,8 @@ void send_get(int connfd, char *request, char *body, char *version) {
     }
   }
   close(fd);
+ // free(copy);
+ // free(read_buffer);
 }
 
 // (socket,request,file,version, bytes,code)
