@@ -99,7 +99,7 @@ void send_get(int connfd, char *request, char *body, char *version) {
       }
     }
   }
-  //close(fd);
+  // close(fd);
   // free(copy);
   // free(read_buffer);
 }
@@ -124,7 +124,7 @@ void send_put(int connfd, char *request, char *body, char *version,
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
     write_len = write(fd, read_buffer, valread);
 
-    sprintf(copy, "%s 201 Created\r\n%s %d\r\n\r\n%s", version, content,
+    sprintf(copy, "%s 201 Created\r\nContent-Length:  %d\r\n\r\n%s", version,
             write_len, read_buffer);
     send(connfd, copy, strlen(copy), 0);
 
@@ -138,8 +138,7 @@ void send_put(int connfd, char *request, char *body, char *version,
 
       valread = recv(connfd, read_buffer, atoi(content_num), 0);
       write_len = write(fd, read_buffer, valread);
-      sprintf(copy, "%s 200 OK\r\nContent-Length: %s\r\n\r\n%s", version,
-              content_num,read_buffer);
+      sprintf(copy, "%s 200 OK\r\nContent-Length: 3\r\n\r\nOK\n", version);
       send(connfd, copy, strlen(copy), 0);
     }
   }
@@ -191,13 +190,12 @@ void handle_connection(int connfd) {
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     write(outfile, buffer, valread);
     sscanf(buffer, "%s %s %s ", request, body, version);
-
-    //    if (strlen(body) != 15) {
-    //    sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n",
-    //    version);
-    //  send(connfd, copy, strlen(copy), 0);
-    // close(connfd);
-    // }
+    // not yet deleted /
+    if (strlen(body) != 15) {
+      sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n", version);
+      send(connfd, copy, strlen(copy), 0);
+      break;
+    }
 
     if (strcmp(request, "GET") == 0) {
       send_get(connfd, request, body, version);
@@ -208,7 +206,7 @@ void handle_connection(int connfd) {
       sscanf(p, "%s %s", content, content_num);
 
       send_put(connfd, request, body, version, content, content_num);
-      // send(connfd, code, strlen(code), 0);
+
     } else if (strcmp(request, "HEAD") == 0) {
       send_head(connfd, request, body, version);
     } else {
