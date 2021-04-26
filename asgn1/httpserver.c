@@ -64,7 +64,7 @@ void send_get(int connfd, char *request, char *body, char *version) {
 
   memmove(&body[0], &body[1], strlen(body));
 
-  fd = open(body, O_RDONLY);
+  fd = open(body, O_RDWR);
 
   // doesnt exist 404
   if (fd < 0) {
@@ -85,7 +85,9 @@ void send_get(int connfd, char *request, char *body, char *version) {
         copy = (char *)realloc(copy, fsize);
       }
       read_len = read(fd, read_buffer, fsize);
+     // printf("%s %d", read_buffer, fsize);
       read_buffer[read_len] = '\0';
+      //  printf("%s ,%d ", read_buffer, read_len);
 
       if (read_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s", version,
@@ -107,8 +109,8 @@ void send_get(int connfd, char *request, char *body, char *version) {
 // (socket,request,file,version, bytes,code)
 void send_put(int connfd, char *request, char *body, char *version,
               char *content, char *content_num) {
-  char copy[atoi(content_num) + 1];
-  char read_buffer[atoi(content_num) + 1];
+  char copy[buffer_size];
+  char read_buffer[buffer_size];
   int fd = STDIN_FILENO;
   int write_len = 0, valread = 0, r = 0;
   struct stat fs;
@@ -116,15 +118,15 @@ void send_put(int connfd, char *request, char *body, char *version,
   memmove(&body[0], &body[1], strlen(body));
   //  int result = access(body,F_OK);
 
-  fd = open(body, O_WRONLY | O_TRUNC);
+  fd = open(body, O_RDWR | O_TRUNC);
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
 
-    // while recv keep reading
+    // while recv keep reading loop later
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
     write_len = write(fd, read_buffer, valread);
 
-    sprintf(copy, "%s 201 Created\r\nContent-Length:  %d\r\n\r\n%s", version,
+    sprintf(copy, "%s 201 Created\r\nContent-Length: %d\r\n\r\n%s", version,
             write_len, read_buffer);
     send(connfd, copy, strlen(copy), 0);
 
@@ -186,15 +188,13 @@ void handle_connection(int connfd) {
   char code[] = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nOK\n";
   char *p;
   // int write_len = 0, read_len = 0;
-
+  // use memcopy for later
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     write(outfile, buffer, valread);
     sscanf(buffer, "%s %s %s ", request, body, version);
     // not yet deleted /
-    if (strlen(body) != 15) {
+    if (strstr(version, "HTTP") == NULL) {
       sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n", version);
-      send(connfd, copy, strlen(copy), 0);
-      break;
     }
 
     if (strcmp(request, "GET") == 0) {
@@ -204,7 +204,7 @@ void handle_connection(int connfd) {
     } else if (strcmp(request, "PUT") == 0) {
       p = strstr(buffer, "Content");
       sscanf(p, "%s %s", content, content_num);
-
+      // check for 400 here later
       send_put(connfd, request, body, version, content, content_num);
 
     } else if (strcmp(request, "HEAD") == 0) {
