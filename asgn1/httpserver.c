@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <arpa/inet.h>
+#include <ctype.h>
 #include <err.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -49,17 +50,17 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
-#define buffer_size 4096
+#define buffer_size 32768
 void send_get(int connfd, char *request, char *body, char *version) {
-  //char copy[buffer_size];
- // char read_buffer[buffer_size];
-  char * copy;
+  // char copy[buffer_size];
+  // char read_buffer[buffer_size];
+  char *copy;
   char *read_buffer;
   int fd = STDIN_FILENO;
   int read_len = 0, r = 0;
   struct stat fs;
   copy = (char *)malloc(buffer_size);
-  read_buffer=(char*)malloc(buffer_size);
+  read_buffer = (char *)malloc(buffer_size);
 
   memmove(&body[0], &body[1], strlen(body));
 
@@ -79,13 +80,13 @@ void send_get(int connfd, char *request, char *body, char *version) {
       close(connfd);
     } else {
       int fsize = fs.st_size;
-      if(fsize > buffer_size) {
-	read_buffer = (char*)realloc(read_buffer,fsize);
-	copy = (char *)realloc(copy,fsize);
+      if (fsize > buffer_size) {
+        read_buffer = (char *)realloc(read_buffer, fsize);
+        copy = (char *)realloc(copy, fsize);
       }
-
       read_len = read(fd, read_buffer, fsize);
       read_buffer[read_len] = '\0';
+
       if (read_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n%s", version,
                 read_len, read_buffer);
@@ -98,9 +99,9 @@ void send_get(int connfd, char *request, char *body, char *version) {
       }
     }
   }
-  close(fd);
- // free(copy);
- // free(read_buffer);
+  //close(fd);
+  // free(copy);
+  // free(read_buffer);
 }
 
 // (socket,request,file,version, bytes,code)
@@ -117,11 +118,11 @@ void send_put(int connfd, char *request, char *body, char *version,
 
   fd = open(body, O_WRONLY | O_TRUNC);
   if (fd < 0) {
-    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRWXU);
+    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
+
     // while recv keep reading
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
-    // send(connfd,code,strlen(code),0);
-    write_len = write(fd, read_buffer, strlen(read_buffer));
+    write_len = write(fd, read_buffer, valread);
 
     sprintf(copy, "%s 201 Created\r\n%s %d\r\n\r\n%s", version, content,
             write_len, read_buffer);
@@ -137,13 +138,12 @@ void send_put(int connfd, char *request, char *body, char *version,
 
       valread = recv(connfd, read_buffer, atoi(content_num), 0);
       write_len = write(fd, read_buffer, valread);
-
-      sprintf(copy, "%s 200 OK\r\n%s %d\r\n\r\n%s", version, content, write_len,
-              read_buffer);
+      sprintf(copy, "%s 200 OK\r\nContent-Length: %s\r\n\r\n%s", version,
+              content_num,read_buffer);
       send(connfd, copy, strlen(copy), 0);
     }
   }
-  close(fd);
+  // close(fd);
 }
 
 void send_head(int connfd, char *request, char *body, char *version) {
@@ -154,7 +154,7 @@ void send_head(int connfd, char *request, char *body, char *version) {
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
-  infile = open(body, O_RDONLY);
+  infile = open(body, O_RDONLY, 0);
   if (infile > 0) {
     valread = read(infile, read_buffer, buffer_size);
     sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
@@ -192,6 +192,13 @@ void handle_connection(int connfd) {
     write(outfile, buffer, valread);
     sscanf(buffer, "%s %s %s ", request, body, version);
 
+    //    if (strlen(body) != 15) {
+    //    sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n",
+    //    version);
+    //  send(connfd, copy, strlen(copy), 0);
+    // close(connfd);
+    // }
+
     if (strcmp(request, "GET") == 0) {
       send_get(connfd, request, body, version);
       // send(connfd, code, strlen(code), 0);
@@ -205,9 +212,7 @@ void handle_connection(int connfd) {
     } else if (strcmp(request, "HEAD") == 0) {
       send_head(connfd, request, body, version);
     } else {
-      sprintf(copy,
-              "%s 500 Internal Server Error\r\nContent-Length: 12\r\n\r\n",
-              version);
+      sprintf(copy, "%s 501 Not Implemented\r\nContent-Length:12\r\n", version);
       send(connfd, copy, strlen(copy), 0);
     }
   }
