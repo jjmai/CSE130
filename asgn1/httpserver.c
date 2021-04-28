@@ -65,22 +65,25 @@ void send_get(int connfd, char *body, char *version) {
   memmove(&body[0], &body[1], strlen(body));
 
   fd = open(body, O_RDWR);
-  // printf("%s ",body);
-  // doesnt exist 404
+
   if (fd < 0) {
-    sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n", version);
+    sprintf(copy, "%s 404 Not Found\r\nContent-Length: 11\r\n\r\nNot Found\r\n",
+            version);
     send(connfd, copy, strlen(copy), 0);
     close(connfd);
   } else {
     r = stat(body, &fs);
     // no permission
     if (r == -1) {
-      sprintf(copy, "%s 403 Forbidden\r\nContent-Length:10\r\n", version);
+      sprintf(copy,
+              "%s 403 Forbidden\r\nContent-Length:11\r\n\r\nForbidden\r\n",
+              version);
       send(connfd, copy, strlen(copy), 0);
       close(connfd);
     } else {
       // handle
       int fsize = fs.st_size;
+      //int count = fsize;
       if (fsize > buffer_size) {
         read_buffer = (char *)realloc(read_buffer, fsize);
         copy = (char *)realloc(copy, fsize);
@@ -96,7 +99,7 @@ void send_get(int connfd, char *body, char *version) {
       } else {
         sprintf(copy,
                 "%s 500 Internal Server Error\r\nContent-Length: "
-                "22\r\n\r\nInternal Server Error",
+                "23\r\n\r\nInternal Server Error\r\n",
                 version);
         send(connfd, copy, strlen(copy), 0);
       }
@@ -109,11 +112,13 @@ void send_get(int connfd, char *body, char *version) {
 
 // (socket,request,file,version, bytes,code)
 void send_put(int connfd, char *body, char *version, char *content_num) {
-  char copy[buffer_size];
-  char read_buffer[buffer_size];
+  char *copy;
+  char *read_buffer;
   int fd = 0;
   int write_len = 0, valread = 0, r = 0;
   struct stat fs;
+  copy = (char *)calloc(buffer_size, sizeof(char));
+  read_buffer = (char *)calloc(buffer_size, sizeof(char));
 
   memmove(&body[0], &body[1], strlen(body));
   fd = access(body, F_OK);
@@ -123,6 +128,10 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
 
     // while recv keep reading loop later
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
+    while (valread > buffer_size) {
+      read_buffer = (char *)realloc(read_buffer, valread);
+      valread -= buffer_size;
+    }
     write_len = write(fd, read_buffer, valread);
 
     sprintf(copy, "%s 201 Created\r\nContent-Length: %d\r\n\r\n", version,
@@ -133,7 +142,9 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
   } else {
     r = stat(body, &fs);
     if (r == -1) {
-      sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\n", version);
+      sprintf(copy,
+              "%s 403 Forbidden\r\nContent-Length: 11\r\n\r\nForbidden\r\n",
+              version);
       send(connfd, copy, strlen(copy), 0);
       close(connfd);
     } else {
@@ -165,7 +176,9 @@ void send_head(int connfd, char *body, char *version) {
   } else {
     r = stat(body, &fs);
     if (r == -1) {
-      sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\n", version);
+      sprintf(copy,
+              "%s 403 Forbidden\r\nContent-Length: 11\r\n\r\nForibdden\r\n",
+              version);
       send(connfd, copy, strlen(copy), 0);
       close(connfd);
     }
@@ -191,7 +204,9 @@ void handle_connection(int connfd) {
     sscanf(buffer, "%s %s %s ", request, body, version);
     // not yet deleted check if ASCII later /
     if (strstr(version, "HTTP") == NULL) {
-      sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n", version);
+      sprintf(copy,
+              "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\r\n",
+              version);
       send(connfd, copy, strlen(copy), 0);
       break;
     }
@@ -201,7 +216,10 @@ void handle_connection(int connfd) {
     } else if (strcmp(request, "PUT") == 0) {
       p = strstr(buffer, "Content");
       if (p == NULL) {
-        sprintf(copy, "%s 400 Bad Request\r\nContent-Length: 12\r\n", version);
+        sprintf(
+            copy,
+            "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\r\n",
+            version);
         send(connfd, copy, strlen(copy), 0);
       }
       sscanf(p, "%s %s", content, content_num);
@@ -210,7 +228,10 @@ void handle_connection(int connfd) {
     } else if (strcmp(request, "HEAD") == 0) {
       send_head(connfd, body, version);
     } else {
-      sprintf(copy, "%s 501 Not Implemented\r\nContent-Length:12\r\n", version);
+      sprintf(copy,
+              "%s 501 Not Implemented\r\nContent-Length:12\r\n\r\nNot "
+              "Implemented\r\n",
+              version);
       send(connfd, copy, strlen(copy), 0);
     }
   }
