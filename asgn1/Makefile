@@ -7,7 +7,7 @@
 #  make
 #  ---
 
-CFLAGS = -Wall -std=c11
+CFLAGS = -Wall -Wextra -Wpedantic -Wshadow -std=c11
 CC = clang $(CFLAGS)
 MEMCHECK = valgrind --leak-check=full
 
@@ -24,8 +24,5 @@ clean		:
 format		:
 		clang-format -i -style=file *.c
 
-infer		:
-		make clean; infer-capture -- make; infer-analyze -- make
-
 valgrind	:
-		valgrind --leak-check=full httpserver
+		valgrind --leak-check=full
