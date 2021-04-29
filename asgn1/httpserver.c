@@ -162,11 +162,8 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
       }
     }
   }
-  // free(copy);
-  // free(read_buffer);
   close(fd);
 }
-
 // responsible for handling HEAD request and response
 void send_head(int connfd, char *body, char *version) {
   char *read_buffer;
@@ -178,15 +175,7 @@ void send_head(int connfd, char *body, char *version) {
 
   memmove(&body[0], &body[1], strlen(body));
   infile = open(body, O_RDONLY, 0);
-  if (infile > 0) {
-    int fsize = fs.st_size;
-    if (fsize > buffer_size) {
-      read_buffer = (char *)realloc(read_buffer, fsize);
-    }
-    valread = read(infile, read_buffer, buffer_size);
-    sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
-    send(connfd, copy, strlen(copy), 0);
-  } else {
+  if (infile < 0) {
     r = stat(body, &fs);
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\n", version);
@@ -195,8 +184,22 @@ void send_head(int connfd, char *body, char *version) {
       sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\n", version);
       send(connfd, copy, strlen(copy), 0);
     }
+  } else if (infile > 0) {
+    int fsize = fs.st_size;
+    if (fsize > buffer_size) {
+      read_buffer = (char *)realloc(read_buffer, fsize);
+    }
+    valread = read(infile, read_buffer, buffer_size);
+    sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
+    send(connfd, copy, strlen(copy), 0);
+  } else {
+    sprintf(copy,
+            "%s 500 Internal Server Error\r\nContent-Length: "
+            "22\r\n\r\n",
+            version);
+    send(connfd, copy, strlen(copy), 0);
   }
-  //  free(copy);
+
   close(infile);
 }
 
@@ -267,7 +270,7 @@ void handle_connection(int connfd) {
     }
   }
   printf("Waiting...\n");
-  // free(p);
+
   // when done, close socket
   close(connfd);
 }
