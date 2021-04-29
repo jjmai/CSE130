@@ -107,6 +107,7 @@ void send_get(int connfd, char *body, char *version) {
       }
     }
   }
+  close(fd);
 }
 
 // handles PUT requese and response
@@ -161,6 +162,9 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
       }
     }
   }
+  // free(copy);
+  // free(read_buffer);
+  close(fd);
 }
 
 // responsible for handling HEAD request and response
@@ -188,12 +192,14 @@ void send_head(int connfd, char *body, char *version) {
       send(connfd, copy, strlen(copy), 0);
     }
   }
+  //  free(copy);
+  close(infile);
 }
 
 // check if file is ASCII values only
 int checker(char *body) {
-  for (int i = 0; i < 16; i++) {
-    if (body[i] > 127) {
+  for (int i = 1; i < 16; i++) {
+    if (isalpha(body[i]) == 0 && isdigit(body[i]) == 0) {
       return 0;
     }
   }
@@ -257,7 +263,7 @@ void handle_connection(int connfd) {
     }
   }
   printf("Waiting...\n");
-
+  // free(p);
   // when done, close socket
   close(connfd);
 }
