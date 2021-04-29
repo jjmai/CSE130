@@ -12,7 +12,7 @@ httperserver.c - The main function program. The required argument to run this pr
 
 Makefile - Instructions for compiling
 
-#INSTRUCTION
+# INSTRUCTION
 
 To compile the program, type 'make'
 
