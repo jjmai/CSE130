@@ -169,16 +169,20 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
 
 // responsible for handling HEAD request and response
 void send_head(int connfd, char *body, char *version) {
-  char read_buffer[buffer_size];
-  int infile = 0;
+  char *read_buffer;
   char *copy;
   copy = (char *)calloc(buffer_size, sizeof(char));
-  int valread = 0, r = 0;
+  read_buffer = (char *)calloc(buffer_size, sizeof(char));
+  int valread = 0, r = 0, infile = 0;
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
   infile = open(body, O_RDONLY, 0);
   if (infile > 0) {
+    int fsize = fs.st_size;
+    if (fsize > buffer_size) {
+      read_buffer = (char *)realloc(read_buffer, fsize);
+    }
     valread = read(infile, read_buffer, buffer_size);
     sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
     send(connfd, copy, strlen(copy), 0);
