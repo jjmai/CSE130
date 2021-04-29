@@ -25,4 +25,4 @@ format		:
 		clang-format -i -style=file *.c
 
 valgrind	:
-		valgrind --leak-check=full
+		MEMCHECK 
