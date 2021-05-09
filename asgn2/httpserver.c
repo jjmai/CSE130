@@ -4,6 +4,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,6 +51,7 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 #define buffer_size 32768
 
 // process a GET request and response
@@ -96,6 +98,8 @@ void send_get(int connfd, char *body, char *version) {
       if (read_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version,
                 read_len);
+        // pthread_mutex_unlock(&lock);
+        // sleep(1);
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, read_len, 0);
       } else {
@@ -212,9 +216,12 @@ int checker(char *body) {
   }
   return 1;
 }
-
-void handle_connection(int connfd) {
+// pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+int counter = 0;
+void *handle_connection(void *arg) {
   // do something
+  int *conn_fd_pointer = (int *)arg;
+  int connfd = *conn_fd_pointer;
   int valread = 0;
   char buffer[buffer_size];
   char request[buffer_size];
@@ -226,6 +233,10 @@ void handle_connection(int connfd) {
   char *p;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
+    counter++;
+    pthread_mutex_lock(&lock);
+    printf("Job %d has started \n", counter);
+
     write(STDOUT_FILENO, buffer, valread);
 
     sscanf(buffer, "%s %s %s ", request, body, version);
@@ -269,10 +280,15 @@ void handle_connection(int connfd) {
       send(connfd, copy, strlen(copy), 0);
     }
   }
+  printf("Job %d has finished \n", counter);
+  pthread_mutex_unlock(&lock);
+  sleep(1);
+
   printf("Waiting...\n");
 
   // when done, close socket
   close(connfd);
+  return NULL;
 }
 
 int main(int argc, char *argv[]) {
@@ -289,6 +305,7 @@ int main(int argc, char *argv[]) {
   }
   listenfd = create_listen_socket(port);
   // get opt here
+  int n = 4, i = 0;
   while ((opt = getopt(argc, argv, "nl:")) != -1) {
     switch (opt) {
     case 'n':
@@ -299,13 +316,22 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+  pthread_t worker[n], dispatcher;
+  int error = 0;
   while (1) {
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) {
       warn("accept error");
       continue;
     }
-    handle_connection(connfd);
+    while (i != n) {
+      if (pthread_create(&(worker[i]), NULL, handle_connection, &connfd) != 0) {
+        printf("Failed to create thread\n");
+      }
+      i++;
+    }
+    i >= n ? i = 0 : i++;
+    // handle_connection(connfd);
   }
   return EXIT_SUCCESS;
 }
