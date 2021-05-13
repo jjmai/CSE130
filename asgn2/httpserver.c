@@ -52,6 +52,8 @@ int create_listen_socket(uint16_t port) {
 }
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
+
 #define buffer_size 32768
 
 // process a GET request and response
@@ -216,7 +218,22 @@ int checker(char *body) {
   }
   return 1;
 }
-// pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+// data structure
+
+typedef struct stack {
+  int count;
+  int size;
+  int front;
+  int back;
+  int shared_integer;
+  int *shared_buffer;
+} stack;
+
+stack *s;
+
+// char buff[buffer_size];
+// int integer;
 int counter = 0;
 void *handle_connection(void *arg) {
   // do something
@@ -233,8 +250,9 @@ void *handle_connection(void *arg) {
   char *p;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
+    // lock variable?
+  //  pthread_mutex_lock(&lock);
     counter++;
-    pthread_mutex_lock(&lock);
     printf("Job %d has started \n", counter);
 
     write(STDOUT_FILENO, buffer, valread);
@@ -279,15 +297,48 @@ void *handle_connection(void *arg) {
               version);
       send(connfd, copy, strlen(copy), 0);
     }
+    printf("Job %d has finished \n", counter);
+   // pthread_mutex_unlock(&lock);
+    sleep(1);
   }
-  printf("Job %d has finished \n", counter);
-  pthread_mutex_unlock(&lock);
-  sleep(1);
-
-  printf("Waiting...\n");
 
   // when done, close socket
   close(connfd);
+  return NULL;
+}
+
+// use shared buffer data structure
+void *handle_thread(void *arg) {
+
+  while (1) {
+
+    pthread_mutex_lock(&lock);
+    // dequeue
+    // pthread_cond_wait(&cond1,&lock);
+    while (s->size == 0) {
+      pthread_cond_wait(&cond1, &lock);
+    }
+    int connfd = s->shared_buffer[s->front];
+    s->size--;
+    s->front++;    
+    pthread_mutex_unlock(&lock);
+
+    handle_connection(&connfd);
+  }
+  return NULL;
+}
+
+void *thread_add(int connfd) {
+
+  pthread_mutex_lock(&lock);
+  // push to stack
+  s->size++;
+  s->shared_buffer[s->back] = connfd;
+  s->back++;
+
+  pthread_mutex_unlock(&lock);
+  pthread_cond_signal(&cond1);
+
   return NULL;
 }
 
@@ -316,22 +367,26 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  pthread_t worker[n], dispatcher;
-  int error = 0;
+  pthread_t worker[n], dispatcher[n];
+  // pthread_mutex_init(&lock,NULL);
+
+  s = (stack *)malloc(sizeof(stack));
+  s->size = 0;
+  s->front = 0;
+  s->back = 0;
+  s->shared_buffer = (int *)malloc(sizeof(int *) * buffer_size);
+
+  for (int j = 0; j < n; j++) {
+    pthread_create(&(dispatcher[j]), NULL, handle_thread, (void *)NULL);
+  }
   while (1) {
+    printf("Waiting for connection...\n");
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) {
       warn("accept error");
       continue;
     }
-    while (i != n) {
-      if (pthread_create(&(worker[i]), NULL, handle_connection, &connfd) != 0) {
-        printf("Failed to create thread\n");
-      }
-      i++;
-    }
-    i >= n ? i = 0 : i++;
-    // handle_connection(connfd);
+    thread_add(connfd);
   }
   return EXIT_SUCCESS;
 }
