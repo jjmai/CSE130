@@ -15,7 +15,22 @@
 
 #define buffer_size 32768
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
+int log_check = 0;
+
+// data structure
+
+typedef struct stack {
+  int count;
+  int size;
+  int front;
+  int back;
+  int shared_integer;
+  int *shared_buffer;
+} stack;
+
+stack *s;
 
 /**
    Converts a string to an 16 bits unsigned integer.
@@ -58,18 +73,27 @@ int create_listen_socket(uint16_t port) {
 
 // logging into a file
 int log_file;
-void logging(char *request, char *body, char *host, char *content_length) {
+void logging(int num, char *request, char *body, char *host, char *version,
+             int content_length) {
   // successful
-  char *copy;
-  copy = (char *)calloc(buffer_size, sizeof(char));
-
-  sprintf(copy, "%s\t/%s\t%s\t%s\n", request, body, host, content_length);
-   write(log_file, copy, strlen(copy));
+  if (log_check == 1) {
+    char *copy;
+    copy = (char *)calloc(buffer_size, sizeof(char));
+    if (num == 200 || num == 201) {
+      sprintf(copy, "%s\t/%s\t%s\t%d\n", request, body, host, content_length);
+      write(log_file, copy, strlen(copy));
+    } else {
+      // fail
+      sprintf(copy, "FAIL\t%s /%s %s\t%d\n", request, body, version, num);
+      write(log_file, copy, strlen(copy));
+    }
+  }
 }
 
 // process a GET request and response
 // builds a response to be sent over to client
-void send_get(int connfd, char *body, char *version) {
+void send_get(int connfd, char *body, char *version, char *request,
+              char *host) {
   char *copy;
   char *read_buffer;
   int fd = 0;
@@ -87,6 +111,7 @@ void send_get(int connfd, char *body, char *version) {
     sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
             version);
     send(connfd, copy, strlen(copy), 0);
+    logging(404, request, body, host, version, 0);
     close(connfd);
   } else {
     r = stat(body, &fs);
@@ -114,7 +139,7 @@ void send_get(int connfd, char *body, char *version) {
         // sleep(1);
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, read_len, 0);
-	logging(re
+        logging(200, request, body, host, version, read_len);
       } else {
         // 0 size byte
         sprintf(copy,
@@ -129,7 +154,8 @@ void send_get(int connfd, char *body, char *version) {
 
 // handles PUT requese and response
 // builds a response header
-void send_put(int connfd, char *body, char *version, char *content_num) {
+void send_put(int connfd, char *body, char *version, char *content_num,
+              char *request, char *host) {
   char *copy;
   char *read_buffer;
   int fd = 0;
@@ -151,6 +177,7 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
             write_len);
     send(connfd, copy, strlen(copy), 0);
     send(connfd, read_buffer, write_len, 0);
+    logging(201, request, body, host, version, write_len);
   } else {
     r = stat(body, &fs);
     // if no permission on file
@@ -169,6 +196,7 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
                 write_len);
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, write_len, 0);
+        logging(200, request, body, host, version, write_len);
       } else {
         // if something faile don program
         sprintf(copy,
@@ -182,7 +210,8 @@ void send_put(int connfd, char *body, char *version, char *content_num) {
   close(fd);
 }
 // responsible for handling HEAD request and response
-void send_head(int connfd, char *body, char *version) {
+void send_head(int connfd, char *body, char *version, char *request,
+               char *host) {
   char *read_buffer;
   char *copy;
   copy = (char *)calloc(buffer_size, sizeof(char));
@@ -209,6 +238,7 @@ void send_head(int connfd, char *body, char *version) {
     valread = read(infile, read_buffer, buffer_size);
     sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
     send(connfd, copy, strlen(copy), 0);
+    logging(200, request, body, host, version, valread);
   } else {
     sprintf(copy,
             "%s 500 Internal Server Error\r\nContent-Length: "
@@ -230,21 +260,6 @@ int checker(char *body) {
   return 1;
 }
 
-// data structure
-
-typedef struct stack {
-  int count;
-  int size;
-  int front;
-  int back;
-  int shared_integer;
-  int *shared_buffer;
-} stack;
-
-stack *s;
-
-// char buff[buffer_size];
-// int integer;
 int counter = 0;
 void *handle_connection(void *arg) {
   // do something
@@ -258,17 +273,20 @@ void *handle_connection(void *arg) {
   char content[buffer_size];
   char content_num[buffer_size];
   char copy[buffer_size];
+  char host_name[buffer_size];
+  char host[buffer_size];
   char *p;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     // lock variable?
-    //  pthread_mutex_lock(&lock);
+    pthread_mutex_lock(&mutex);
     counter++;
     printf("Job %d has started \n", counter);
 
     write(STDOUT_FILENO, buffer, valread);
 
-    sscanf(buffer, "%s %s %s ", request, body, version);
+    sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
+
     // checks to see if request is good
     if (strstr(version, "HTTP") == NULL || strlen(body) != 16) {
       sprintf(copy,
@@ -285,9 +303,10 @@ void *handle_connection(void *arg) {
       send(connfd, copy, strlen(copy), 0);
       break;
     }
+    // checks to see if connection is valid
 
     if (strcmp(request, "GET") == 0) {
-      send_get(connfd, body, version);
+      send_get(connfd, body, version, request, host);
     } else if (strcmp(request, "PUT") == 0) {
       p = strstr(buffer, "Content");
       if (p == NULL) {
@@ -297,10 +316,10 @@ void *handle_connection(void *arg) {
         send(connfd, copy, strlen(copy), 0);
       }
       sscanf(p, "%s %s", content, content_num);
-      send_put(connfd, body, version, content_num);
+      send_put(connfd, body, version, content_num, request, host);
 
     } else if (strcmp(request, "HEAD") == 0) {
-      send_head(connfd, body, version);
+      send_head(connfd, body, version, request, host);
     } else {
       sprintf(copy,
               "%s 501 Not Implemented\r\nContent-Length:16\r\n\r\nNot "
@@ -309,7 +328,7 @@ void *handle_connection(void *arg) {
       send(connfd, copy, strlen(copy), 0);
     }
     printf("Job %d has finished \n\n", counter);
-    // pthread_mutex_unlock(&lock);
+    pthread_mutex_unlock(&mutex);
     sleep(1);
   }
 
@@ -384,10 +403,12 @@ int main(int argc, char *argv[]) {
         n = atoi(optarg);
 
       case 'l':
-        log_file = open(optarg, O_CREAT | O_WRONLY | O_TRUNC);
+        log_file =
+            open(optarg, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
         if (log_file < 0) {
           errx(EXIT_FAILURE, "can't open log_file");
         }
+        log_check = 1;
 
       default:
         break;
