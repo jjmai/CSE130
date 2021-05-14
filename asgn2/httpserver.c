@@ -12,6 +12,11 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#define buffer_size 32768
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
+
 /**
    Converts a string to an 16 bits unsigned integer.
    Returns 0 if the string is malformed or out of the range.
@@ -51,10 +56,16 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
+// logging into a file
+int log_file;
+void logging(char *request, char *body, char *host, char *content_length) {
+  // successful
+  char *copy;
+  copy = (char *)calloc(buffer_size, sizeof(char));
 
-#define buffer_size 32768
+  sprintf(copy, "%s\t/%s\t%s\t%s\n", request, body, host, content_length);
+   write(log_file, copy, strlen(copy));
+}
 
 // process a GET request and response
 // builds a response to be sent over to client
@@ -69,7 +80,6 @@ void send_get(int connfd, char *body, char *version) {
 
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
-
   fd = open(body, O_RDONLY);
 
   // if file doesn't exists
@@ -104,6 +114,7 @@ void send_get(int connfd, char *body, char *version) {
         // sleep(1);
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, read_len, 0);
+	logging(re
       } else {
         // 0 size byte
         sprintf(copy,
@@ -251,7 +262,7 @@ void *handle_connection(void *arg) {
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     // lock variable?
-  //  pthread_mutex_lock(&lock);
+    //  pthread_mutex_lock(&lock);
     counter++;
     printf("Job %d has started \n", counter);
 
@@ -297,8 +308,8 @@ void *handle_connection(void *arg) {
               version);
       send(connfd, copy, strlen(copy), 0);
     }
-    printf("Job %d has finished \n", counter);
-   // pthread_mutex_unlock(&lock);
+    printf("Job %d has finished \n\n", counter);
+    // pthread_mutex_unlock(&lock);
     sleep(1);
   }
 
@@ -318,9 +329,12 @@ void *handle_thread(void *arg) {
     while (s->size == 0) {
       pthread_cond_wait(&cond1, &lock);
     }
+    if (s->front == buffer_size) {
+      s->front = 0;
+    }
     int connfd = s->shared_buffer[s->front];
     s->size--;
-    s->front++;    
+    s->front++;
     pthread_mutex_unlock(&lock);
 
     handle_connection(&connfd);
@@ -328,10 +342,14 @@ void *handle_thread(void *arg) {
   return NULL;
 }
 
+// add thread to stack buffer
 void *thread_add(int connfd) {
 
   pthread_mutex_lock(&lock);
   // push to stack
+  if (s->back == buffer_size) {
+    s->back = 0;
+  }
   s->size++;
   s->shared_buffer[s->back] = connfd;
   s->back++;
@@ -345,9 +363,9 @@ void *thread_add(int connfd) {
 int main(int argc, char *argv[]) {
   int listenfd;
   uint16_t port;
-  int opt = 0;
+  int opt;
 
-  if (argc != 2) {
+  if (argc < 2) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
   port = strtouint16(argv[1]);
@@ -356,17 +374,29 @@ int main(int argc, char *argv[]) {
   }
   listenfd = create_listen_socket(port);
   // get opt here
+
   int n = 4, i = 0;
-  while ((opt = getopt(argc, argv, "nl:")) != -1) {
-    switch (opt) {
-    case 'n':
-      break;
-    case 'l':
-      break;
-    default:
-      break;
+
+  while (optind < argc) {
+    if ((opt = getopt(argc, argv, "N:l:")) != -1) {
+      switch (opt) {
+      case 'N':
+        n = atoi(optarg);
+
+      case 'l':
+        log_file = open(optarg, O_CREAT | O_WRONLY | O_TRUNC);
+        if (log_file < 0) {
+          errx(EXIT_FAILURE, "can't open log_file");
+        }
+
+      default:
+        break;
+      }
+    } else {
+      optind++;
     }
   }
+
   pthread_t worker[n], dispatcher[n];
   // pthread_mutex_init(&lock,NULL);
 
@@ -386,6 +416,7 @@ int main(int argc, char *argv[]) {
       warn("accept error");
       continue;
     }
+
     thread_add(connfd);
   }
   return EXIT_SUCCESS;
