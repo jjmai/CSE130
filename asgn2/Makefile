@@ -14,7 +14,7 @@ MEMCHECK = valgrind --leak-check=full
 all		:	httpserver
 
 httpserver	:	httpserver.o
-		$(CC) -o httpserver httpserver.o -g
+		$(CC) -o httpserver httpserver.o -g -lpthread
 
 httpserver.o	:	httpserver.c
 		$(CC) -c httpserver.c

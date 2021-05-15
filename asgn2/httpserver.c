@@ -16,6 +16,7 @@
 #define buffer_size 32768
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
 int log_check = 0;
 
@@ -78,6 +79,7 @@ void logging(int num, char *request, char *body, char *host, char *version,
              int content_length) {
   // successful
   if (log_check == 1) {
+    pthread_mutex_lock(&log_lock);
     char *copy;
     copy = (char *)calloc(buffer_size, sizeof(char));
     if (num == 200 || num == 201) {
@@ -88,6 +90,7 @@ void logging(int num, char *request, char *body, char *host, char *version,
       sprintf(copy, "FAIL\t%s /%s %s\t%d\n", request, body, version, num);
       write(log_file, copy, strlen(copy));
     }
+    pthread_mutex_unlock(&log_lock);
   }
 }
 
@@ -412,8 +415,8 @@ int main(int argc, char *argv[]) {
         log_check = 1;
         break;
       case '?':
-	printf("WRONG FLAG\n");
-	exit(1);
+        printf("WRONG FLAG\n");
+        exit(1);
       default:
         break;
       }
