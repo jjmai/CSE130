@@ -73,6 +73,7 @@ int create_listen_socket(uint16_t port) {
 
 // logging into a file
 int log_file;
+// int log_num=0;
 void logging(int num, char *request, char *body, char *host, char *version,
              int content_length) {
   // successful
@@ -401,7 +402,7 @@ int main(int argc, char *argv[]) {
       switch (opt) {
       case 'N':
         n = atoi(optarg);
-
+        break;
       case 'l':
         log_file =
             open(optarg, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
@@ -409,7 +410,10 @@ int main(int argc, char *argv[]) {
           errx(EXIT_FAILURE, "can't open log_file");
         }
         log_check = 1;
-
+        break;
+      case '?':
+	printf("WRONG FLAG\n");
+	exit(1);
       default:
         break;
       }
