@@ -115,8 +115,8 @@ void send_get(int connfd, char *body, char *version, char *request,
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
   fd = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
-  //r = access(body, R_OK | W_OK);
- 
+  // r = access(body, R_OK | W_OK);
+
   // if file doesn't exists
   if (fd < 0) {
     sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
@@ -192,8 +192,8 @@ void send_put(int connfd, char *body, char *version, char *content_num,
     send(connfd, read_buffer, write_len, 0);
     logging(201, request, body, host, version, write_len);
   } else {
-   // r = access(body, R_OK | W_OK);
-    r = stat(body,&fs);
+    // r = access(body, R_OK | W_OK);
+    r = stat(body, &fs);
     // if no permission on file
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\nForbidden\n",
@@ -279,7 +279,6 @@ int checker(char *body) {
   return 1;
 }
 
-int counter = 0;
 void *handle_connection(void *arg) {
   // do something
   int *conn_fd_pointer = (int *)arg;
@@ -299,8 +298,8 @@ void *handle_connection(void *arg) {
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     // lock variable?
     // pthread_mutex_lock(&mutex);
-    counter++;
-    printf("Job %d has started \n", counter);
+
+    printf("Job has started with connection:%d\n\n", connfd);
 
     write(STDOUT_FILENO, buffer, valread);
 
@@ -351,7 +350,7 @@ void *handle_connection(void *arg) {
       send(connfd, copy, strlen(copy), 0);
       logging(501, request, body, host, version, 0);
     }
-    printf("Job %d has finished \n\n", counter);
+    printf("Job has finished with connection: %d \n\n", connfd);
     // pthread_mutex_unlock(&mutex);
     sleep(1);
   }
@@ -363,25 +362,31 @@ void *handle_connection(void *arg) {
 
 // use shared buffer data structure
 void *handle_thread(void *arg) {
-
+  int thread = *((int *)arg);
+  printf("Creating Thread: %d\n", thread);
   while (1) {
-
+    int connfd = 0;
     pthread_mutex_lock(&lock);
     // dequeue
-    // pthread_cond_wait(&cond1,&lock);
-    while (s->size == 0) {
+
+    if (s->size == 0) {
       pthread_cond_wait(&cond1, &lock);
     }
-    if (s->front == buffer_size) {
-      s->front = 0;
-    }
-    int connfd = s->shared_buffer[s->front];
-    s->size--;
-    s->front++;
-    pthread_mutex_unlock(&lock);
+    if (s->size != 0) {
+      printf("Thread: %d has started working\n", thread);
+      connfd = s->shared_buffer[s->front];
+      s->size--;
+      s->front++;
 
-    handle_connection(&connfd);
+      pthread_mutex_unlock(&lock);
+
+      handle_connection(&connfd);
+      printf("Thread: %d has finished. Waiting for new connection\n", thread);
+    } else {
+      pthread_mutex_unlock(&lock);
+    }
   }
+
   return NULL;
 }
 
@@ -453,7 +458,8 @@ int main(int argc, char *argv[]) {
   }
   listenfd = create_listen_socket(port);
 
-  pthread_t worker[n], dispatcher[n];
+  pthread_t dispatcher[n];
+  int worker[n];
   // pthread_mutex_init(&lock,NULL);
   // pthread_cond_init(&cond1,NULL);
 
@@ -464,8 +470,10 @@ int main(int argc, char *argv[]) {
   s->shared_buffer = (int *)malloc(sizeof(int *) * buffer_size);
 
   for (int j = 0; j < n; j++) {
-    pthread_create(&(dispatcher[j]), NULL, handle_thread, (void *)NULL);
+    worker[j] = j;
+    pthread_create(&(dispatcher[j]), NULL, handle_thread, (void *)&worker[j]);
   }
+
   while (1) {
     printf("Waiting for connection...\n");
     int connfd = accept(listenfd, NULL, NULL);
