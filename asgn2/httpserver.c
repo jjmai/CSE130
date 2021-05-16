@@ -79,18 +79,24 @@ void logging(int num, char *request, char *body, char *host, char *version,
              int content_length) {
   // successful
   if (log_check == 1) {
-    pthread_mutex_lock(&log_lock);
+    int offset = lseek(log_file, 0, SEEK_CUR);
+    char nul = '\0';
+    // pthread_mutex_lock(&log_lock);
     char *copy;
     copy = (char *)calloc(buffer_size, sizeof(char));
     if (num == 200 || num == 201) {
       sprintf(copy, "%s\t/%s\t%s\t%d\n", request, body, host, content_length);
-      write(log_file, copy, strlen(copy));
+      for (unsigned long i = 0; i < strlen(copy); i++) {
+        write(log_file, &nul, 1);
+      }
+
+      pwrite(log_file, copy, strlen(copy), offset);
     } else {
       // fail
       sprintf(copy, "FAIL\t%s /%s %s\t%d\n", request, body, version, num);
       write(log_file, copy, strlen(copy));
     }
-    pthread_mutex_unlock(&log_lock);
+    // pthread_mutex_unlock(&log_lock);
   }
 }
 
@@ -108,8 +114,9 @@ void send_get(int connfd, char *body, char *version, char *request,
 
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
-  fd = open(body, O_RDONLY);
-
+  fd = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
+  //r = access(body, R_OK | W_OK);
+ 
   // if file doesn't exists
   if (fd < 0) {
     sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
@@ -124,6 +131,7 @@ void send_get(int connfd, char *body, char *version, char *request,
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length:10\r\n\r\nForbidden\n",
               version);
       send(connfd, copy, strlen(copy), 0);
+      logging(403, request, body, host, version, 0);
       close(connfd);
     } else {
       int fsize = fs.st_size;
@@ -150,6 +158,7 @@ void send_get(int connfd, char *body, char *version, char *request,
                 "%s 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
                 version);
         send(connfd, copy, strlen(copy), 0);
+        logging(500, request, body, host, version, 0);
       }
     }
   }
@@ -172,7 +181,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   fd = access(body, F_OK);
   // if file doesn't exist, we create one
   if (fd < 0) {
-    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
+    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
 
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
     write_len = write(fd, read_buffer, valread);
@@ -183,15 +192,17 @@ void send_put(int connfd, char *body, char *version, char *content_num,
     send(connfd, read_buffer, write_len, 0);
     logging(201, request, body, host, version, write_len);
   } else {
-    r = stat(body, &fs);
+   // r = access(body, R_OK | W_OK);
+    r = stat(body,&fs);
     // if no permission on file
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\nForbidden\n",
               version);
       send(connfd, copy, strlen(copy), 0);
+      logging(40, request, body, host, version, 0);
       close(connfd);
     } else {
-      fd = open(body, O_CREAT | O_WRONLY | O_TRUNC);
+      fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
       valread = recv(connfd, read_buffer, atoi(content_num), 0);
       write_len = write(fd, read_buffer, valread);
       // if able to write to existing file
@@ -208,6 +219,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
                 "22\r\n\r\nInternal Server Error\n",
                 version);
         send(connfd, copy, strlen(copy), 0);
+        logging(500, request, body, host, version, 0);
       }
     }
   }
@@ -224,15 +236,17 @@ void send_head(int connfd, char *body, char *version, char *request,
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
-  infile = open(body, O_RDONLY, 0);
+  infile = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
   if (infile < 0) {
     r = stat(body, &fs);
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length: 10\r\n\r\n", version);
       send(connfd, copy, strlen(copy), 0);
+      logging(403, request, body, host, version, 0);
     } else {
       sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\n", version);
       send(connfd, copy, strlen(copy), 0);
+      logging(404, request, body, host, version, 0);
     }
   } else if (infile > 0) {
     int fsize = fs.st_size;
@@ -249,6 +263,7 @@ void send_head(int connfd, char *body, char *version, char *request,
             "22\r\n\r\n",
             version);
     send(connfd, copy, strlen(copy), 0);
+    logging(500, request, body, host, version, 0);
   }
 
   close(infile);
@@ -283,7 +298,7 @@ void *handle_connection(void *arg) {
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
     // lock variable?
-    pthread_mutex_lock(&mutex);
+    // pthread_mutex_lock(&mutex);
     counter++;
     printf("Job %d has started \n", counter);
 
@@ -292,11 +307,13 @@ void *handle_connection(void *arg) {
     sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
 
     // checks to see if request is good
-    if (strstr(version, "HTTP") == NULL || strlen(body) != 16) {
+    if (strstr(version, "HTTP/1.1") == NULL || strlen(body) != 16 ||
+        strstr(host_name, "Host") == NULL) {
       sprintf(copy,
               "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
               version);
       send(connfd, copy, strlen(copy), 0);
+      logging(400, request, body, host, version, 0);
       break;
     }
     // checks if file is ascii
@@ -305,6 +322,7 @@ void *handle_connection(void *arg) {
               "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
               version);
       send(connfd, copy, strlen(copy), 0);
+      logging(400, request, body, host, version, 0);
       break;
     }
     // checks to see if connection is valid
@@ -318,6 +336,7 @@ void *handle_connection(void *arg) {
                 "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
                 version);
         send(connfd, copy, strlen(copy), 0);
+        logging(400, request, body, host, version, 0);
       }
       sscanf(p, "%s %s", content, content_num);
       send_put(connfd, body, version, content_num, request, host);
@@ -330,9 +349,10 @@ void *handle_connection(void *arg) {
               "Implemented\n",
               version);
       send(connfd, copy, strlen(copy), 0);
+      logging(501, request, body, host, version, 0);
     }
     printf("Job %d has finished \n\n", counter);
-    pthread_mutex_unlock(&mutex);
+    // pthread_mutex_unlock(&mutex);
     sleep(1);
   }
 
@@ -391,16 +411,18 @@ int main(int argc, char *argv[]) {
   if (argc < 2) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
-  port = strtouint16(argv[1]);
-  if (port == 0) {
-    errx(EXIT_FAILURE, "invalid port number: %s", argv[1]);
-  }
-  listenfd = create_listen_socket(port);
+
+  //  port = strtouint16(argv[1]);
+  // if (port == 0) {
+  // errx(EXIT_FAILURE, "invalid port number: %s", argv[1]);
+  // }
+  // listenfd = create_listen_socket(port);
   // get opt here
 
   int n = 4, i = 0;
 
   while (optind < argc) {
+    i++;
     if ((opt = getopt(argc, argv, "N:l:")) != -1) {
       switch (opt) {
       case 'N':
@@ -420,13 +442,20 @@ int main(int argc, char *argv[]) {
       default:
         break;
       }
+      i++;
     } else {
       optind++;
+      port = strtouint16(argv[i]);
+      if (port == 0) {
+        errx(EXIT_FAILURE, "invalid port number: %s", argv[i]);
+      }
     }
   }
+  listenfd = create_listen_socket(port);
 
   pthread_t worker[n], dispatcher[n];
   // pthread_mutex_init(&lock,NULL);
+  // pthread_cond_init(&cond1,NULL);
 
   s = (stack *)malloc(sizeof(stack));
   s->size = 0;
