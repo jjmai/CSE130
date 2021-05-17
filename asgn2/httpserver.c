@@ -373,6 +373,7 @@ void *handle_thread(void *arg) {
       pthread_cond_wait(&cond1, &lock);
     }
     if (s->size != 0) {
+      s->count++;
       printf("Thread: %d has started working\n", thread);
       connfd = s->shared_buffer[s->front];
       s->size--;
@@ -382,6 +383,7 @@ void *handle_thread(void *arg) {
 
       handle_connection(&connfd);
       printf("Thread: %d has finished. Waiting for new connection\n", thread);
+      s->count--;
     } else {
       pthread_mutex_unlock(&lock);
     }
@@ -467,22 +469,25 @@ int main(int argc, char *argv[]) {
   s->size = 0;
   s->front = 0;
   s->back = 0;
+  s->count = 0;
   s->shared_buffer = (int *)malloc(sizeof(int *) * buffer_size);
 
   for (int j = 0; j < n; j++) {
     worker[j] = j;
     pthread_create(&(dispatcher[j]), NULL, handle_thread, (void *)&worker[j]);
   }
-
+  printf("Waiting for New Connection...\n");
   while (1) {
-    printf("Waiting for connection...\n");
-    int connfd = accept(listenfd, NULL, NULL);
-    if (connfd < 0) {
-      warn("accept error");
-      continue;
-    }
+   // printf("Waiting for connection...\n");
+    if (s->count != n) {
+      int connfd = accept(listenfd, NULL, NULL);
+      if (connfd < 0) {
+        warn("accept error");
+        continue;
+      }
 
-    thread_add(connfd);
+      thread_add(connfd);
+    }
   }
   return EXIT_SUCCESS;
 }
