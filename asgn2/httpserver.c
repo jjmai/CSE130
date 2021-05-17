@@ -27,7 +27,7 @@ typedef struct stack {
   int size;
   int front;
   int back;
-  int shared_integer;
+  int capacity;
   int *shared_buffer;
 } stack;
 
@@ -378,6 +378,9 @@ void *handle_thread(void *arg) {
       connfd = s->shared_buffer[s->front];
       s->size--;
       s->front++;
+      if (s->front == s->capacity) {
+        s->front = 0;
+      }
 
       pthread_mutex_unlock(&lock);
 
@@ -397,12 +400,16 @@ void *thread_add(int connfd) {
 
   pthread_mutex_lock(&lock);
   // push to stack
-  if (s->back == buffer_size) {
-    s->back = 0;
+  if (s->size != s->capacity) {
+
+    s->size++;
+    if(s->back == s->capacity) {
+      s->back = 0;
+    }
+    s->shared_buffer[s->back] = connfd;
+    s->back++;
+    
   }
-  s->size++;
-  s->shared_buffer[s->back] = connfd;
-  s->back++;
 
   pthread_mutex_unlock(&lock);
   pthread_cond_signal(&cond1);
@@ -434,6 +441,9 @@ int main(int argc, char *argv[]) {
       switch (opt) {
       case 'N':
         n = atoi(optarg);
+	if( n==0) {
+          errx(EXIT_FAILURE, "thread size must be grater than 0");
+	}
         break;
       case 'l':
         log_file =
@@ -470,7 +480,8 @@ int main(int argc, char *argv[]) {
   s->front = 0;
   s->back = 0;
   s->count = 0;
-  s->shared_buffer = (int *)malloc(sizeof(int *) * buffer_size);
+  s->capacity = 1024;
+  s->shared_buffer = (int *)malloc(sizeof(int *) * 1024);
 
   for (int j = 0; j < n; j++) {
     worker[j] = j;
@@ -478,16 +489,16 @@ int main(int argc, char *argv[]) {
   }
   printf("Waiting for New Connection...\n");
   while (1) {
-   // printf("Waiting for connection...\n");
-    if (s->count != n) {
-      int connfd = accept(listenfd, NULL, NULL);
-      if (connfd < 0) {
-        warn("accept error");
-        continue;
-      }
-
-      thread_add(connfd);
+    // printf("Waiting for connection...\n");
+    //  if (s->count != n) {
+    int connfd = accept(listenfd, NULL, NULL);
+    if (connfd < 0) {
+      warn("accept error");
+      continue;
     }
+
+    thread_add(connfd);
+    // }
   }
   return EXIT_SUCCESS;
 }
