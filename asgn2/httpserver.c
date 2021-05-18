@@ -173,6 +173,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   long write_len = 0, valread = 0, r = 0;
   struct stat fs;
   long fsize = atoi(content_num);
+  long total = 0;
 
   copy = (char *)malloc(sizeof(char) * buffer_size);
   // read_buffer = (char *)malloc(sizeof(char) * buffer_size);
@@ -183,23 +184,34 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   // if file doesn't exist, we create one
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-    while (fsize > buffer_size) {
-      read_buffer = (char *)realloc(read_buffer, buffer_size);
-      fsize -= buffer_size;
-    }
     fsize = atoi(content_num);
+
     read_buffer = (char *)malloc(sizeof(char) * fsize);
 
-    valread = recv(connfd, read_buffer, fsize, 0);
+    while (total < fsize) {
+      valread = recv(connfd, read_buffer, fsize, 0);
+      total += valread;
+      if (valread == 0) {
 
-    write_len = write(fd, read_buffer, valread);
-
+        break;
+      }
+      write_len += write(fd, read_buffer, valread);
+    }
     // if able to write to a created file
-    sprintf(copy, "%s 201 Created\r\nContent-Length: %ld\r\n\r\n", version,
-            write_len);
-    send(connfd, copy, strlen(copy), 0);
-    send(connfd, read_buffer, write_len, 0);
-    logging(201, request, body, host, version, write_len);
+    if (write_len > 0) {
+      sprintf(copy, "%s 201 Created\r\nContent-Length: %ld\r\n\r\n", version,
+              write_len);
+      send(connfd, copy, strlen(copy), 0);
+      send(connfd, read_buffer, write_len, 0);
+      logging(201, request, body, host, version, write_len);
+    } else {
+      sprintf(copy,
+              "%s 500 Internal Server Error\r\nContent-Length: "
+              "22\r\n\r\nInternal Server Error\n",
+              version);
+      send(connfd, copy, strlen(copy), 0);
+      logging(500, request, body, host, version, 0);
+    }
   } else {
     // r = access(body, R_OK | W_OK);
     r = stat(body, &fs);
@@ -212,24 +224,24 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       close(connfd);
     } else {
       fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-      // while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) > 0)
+      // while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) >
+      // 0)
       // {
 
       fsize = atoi(content_num);
-      
+
       read_buffer = (char *)malloc(sizeof(char) * fsize);
-      long total=0;
-      while(total < fsize) {
-        valread = recv(connfd,read_buffer,fsize,0);
-	total += valread; 
-	if(valread == 0) {
-           break;
-	}
-        write_len = write(fd,read_buffer,valread);
+
+      while (total < fsize) {
+        valread = recv(connfd, read_buffer, fsize, 0);
+        total += valread;
+        if (valread == 0) {
+
+          break;
+        }
+        write_len += write(fd, read_buffer, valread);
       }
 
-      //valread = recv(connfd,read_buffer,buffer_size,0);
-      //write_len = write(fd, read_buffer, valread);
       // if able to write to existing file
       if (write_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version,
@@ -251,6 +263,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   }
   close(fd);
 }
+
 // responsible for handling HEAD request and response
 void send_head(int connfd, char *body, char *version, char *request,
                char *host) {
