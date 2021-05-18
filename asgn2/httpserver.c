@@ -175,7 +175,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   int write_len = 0, valread = 0, r = 0;
   struct stat fs;
   copy = (char *)malloc(sizeof(char) * buffer_size);
-  read_buffer = (char *)malloc(sizeof(char)* buffer_size);
+  read_buffer = (char *)malloc(sizeof(char) * buffer_size);
 
   memmove(&body[0], &body[1], strlen(body));
 
@@ -206,20 +206,13 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       close(connfd);
     } else {
       fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-      //while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) == 0)
-      while(1) {
-	write(STDOUT_FILENO,"entering\n",10);
-	//fails here	
-        valread= recv(connfd,read_buffer,atoi(content_num),0);
+      // while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) ==
+      // 0)
 
-	if(valread >0) {
-            write(STDOUT_FILENO,"success\n",20);
-            break;
-	}
-      }
-       
+      valread = recv(connfd, read_buffer, atoi(content_num), 0);
+
       write_len = write(fd, read_buffer, valread);
-     
+
       // if able to write to existing file
       if (write_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version,
@@ -227,7 +220,6 @@ void send_put(int connfd, char *body, char *version, char *content_num,
 
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, write_len, 0);
-
         logging(200, request, body, host, version, write_len);
       } else {
         // if something faile don program
@@ -311,15 +303,14 @@ void *handle_connection(void *arg) {
   char host_name[buffer_size];
   char host[buffer_size];
   char *p;
+  int new_line_index = 0;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
-    // lock variable?
-    // pthread_mutex_lock(&mutex);
 
     printf("Job has started with connection:%d\n\n", connfd);
 
-     write(STDOUT_FILENO, buffer, valread);
-     write(STDOUT_FILENO,"Hekki\n",6);
+    write(STDOUT_FILENO, buffer, valread);
+    // write(STDOUT_FILENO,"Hekki\n",6);
 
     sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
 
@@ -372,7 +363,7 @@ void *handle_connection(void *arg) {
     }
     printf("Job has finished with connection: %d \n\n", connfd);
     // pthread_mutex_unlock(&mutex);
-    sleep(1);
+    // sleep(1);
   }
 
   // when done, close socket
