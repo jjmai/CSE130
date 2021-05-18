@@ -17,7 +17,7 @@ httpserver	:	httpserver.o
 		$(CC) -o httpserver httpserver.o -g -lpthread
 
 httpserver.o	:	httpserver.c
-		$(CC) -c httpserver.c
+		$(CC) -c httpserver.c -g
 
 clean		:
 		rm -rf *.o httpserver

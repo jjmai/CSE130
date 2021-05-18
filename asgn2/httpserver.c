@@ -116,7 +116,7 @@ void send_get(int connfd, char *body, char *version, char *request,
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
   fd = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
-  // r = access(body, R_OK | W_OK);
+  //r = access(body, R_OK | W_OK);
 
   // if file doesn't exists
   if (fd < 0) {
@@ -126,7 +126,8 @@ void send_get(int connfd, char *body, char *version, char *request,
     logging(404, request, body, host, version, 0);
     close(connfd);
   } else {
-    r = stat(body, &fs);
+     r = stat(body, &fs);
+     
     // no permission on file
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length:10\r\n\r\nForbidden\n",
@@ -140,7 +141,7 @@ void send_get(int connfd, char *body, char *version, char *request,
       read_buffer = (char *)malloc(sizeof(char) * fsize);
 
       read_len = read(fd, read_buffer, fsize);
-      read_buffer[read_len] = '\0';
+      //read_buffer[read_len] = '\0';
 
       // if able to read byte>0
 
