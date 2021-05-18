@@ -134,14 +134,14 @@ void send_get(int connfd, char *body, char *version, char *request,
       logging(403, request, body, host, version, 0);
       close(connfd);
     } else {
-      int fsize = fs.st_size;
-      // realloc more space in buffer if needed
-      if (fsize >= buffer_size) {
-        read_buffer = (char *)realloc(read_buffer, fsize);
-        copy = (char *)realloc(copy, fsize);
+      long fsize = fs.st_size;
+      while(fsize > buffer_size) {
+         read_buffer = (char*) realloc(read_buffer,buffer_size);
+	 fsize-= buffer_size;
       }
+      
       read_len = read(fd, read_buffer, fsize);
-      // read_buffer[read_len] = '\0';
+      read_buffer[read_len] = '\0';
 
       // if able to read byte>0
       if (read_len > 0) {
