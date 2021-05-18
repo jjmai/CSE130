@@ -109,8 +109,8 @@ void send_get(int connfd, char *body, char *version, char *request,
   int fd = 0;
   int read_len = 0, r = 0;
   struct stat fs;
-  copy = (char *)calloc(buffer_size, sizeof(char));
-  read_buffer = (char *)calloc(buffer_size, sizeof(char));
+  copy = (char *)malloc(sizeof(char) * buffer_size);
+  read_buffer = (char *)malloc(sizeof(char) * buffer_size);
 
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
@@ -136,12 +136,12 @@ void send_get(int connfd, char *body, char *version, char *request,
     } else {
       int fsize = fs.st_size;
       // realloc more space in buffer if needed
-      if (fsize > buffer_size) {
+      if (fsize >= buffer_size) {
         read_buffer = (char *)realloc(read_buffer, fsize);
         copy = (char *)realloc(copy, fsize);
       }
       read_len = read(fd, read_buffer, fsize);
-      read_buffer[read_len] = '\0';
+      // read_buffer[read_len] = '\0';
 
       // if able to read byte>0
       if (read_len > 0) {
@@ -174,17 +174,20 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   int fd = 0;
   int write_len = 0, valread = 0, r = 0;
   struct stat fs;
-  copy = (char *)calloc(atoi(content_num), sizeof(char));
-  read_buffer = (char *)calloc(atoi(content_num), sizeof(char));
+  copy = (char *)malloc(sizeof(char) * buffer_size);
+  read_buffer = (char *)malloc(sizeof(char)* buffer_size);
 
   memmove(&body[0], &body[1], strlen(body));
+
   fd = access(body, F_OK);
   // if file doesn't exist, we create one
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
 
     valread = recv(connfd, read_buffer, atoi(content_num), 0);
+
     write_len = write(fd, read_buffer, valread);
+
     // if able to write to a created file
     sprintf(copy, "%s 201 Created\r\nContent-Length: %d\r\n\r\n", version,
             write_len);
@@ -203,14 +206,28 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       close(connfd);
     } else {
       fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-      valread = recv(connfd, read_buffer, atoi(content_num), 0);
+      //while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) == 0)
+      while(1) {
+	write(STDOUT_FILENO,"entering\n",10);
+	//fails here	
+        valread= recv(connfd,read_buffer,atoi(content_num),0);
+
+	if(valread >0) {
+            write(STDOUT_FILENO,"success\n",20);
+            break;
+	}
+      }
+       
       write_len = write(fd, read_buffer, valread);
+     
       // if able to write to existing file
       if (write_len > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version,
                 write_len);
+
         send(connfd, copy, strlen(copy), 0);
         send(connfd, read_buffer, write_len, 0);
+
         logging(200, request, body, host, version, write_len);
       } else {
         // if something faile don program
@@ -301,7 +318,8 @@ void *handle_connection(void *arg) {
 
     printf("Job has started with connection:%d\n\n", connfd);
 
-    write(STDOUT_FILENO, buffer, valread);
+     write(STDOUT_FILENO, buffer, valread);
+     write(STDOUT_FILENO,"Hekki\n",6);
 
     sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
 
@@ -330,6 +348,7 @@ void *handle_connection(void *arg) {
       send_get(connfd, body, version, request, host);
     } else if (strcmp(request, "PUT") == 0) {
       p = strstr(buffer, "Content");
+
       if (p == NULL) {
         sprintf(copy,
                 "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
@@ -338,6 +357,7 @@ void *handle_connection(void *arg) {
         logging(400, request, body, host, version, 0);
       }
       sscanf(p, "%s %s", content, content_num);
+
       send_put(connfd, body, version, content_num, request, host);
 
     } else if (strcmp(request, "HEAD") == 0) {
@@ -403,12 +423,11 @@ void *thread_add(int connfd) {
   if (s->size != s->capacity) {
 
     s->size++;
-    if(s->back == s->capacity) {
+    if (s->back == s->capacity) {
       s->back = 0;
     }
     s->shared_buffer[s->back] = connfd;
     s->back++;
-    
   }
 
   pthread_mutex_unlock(&lock);
@@ -441,9 +460,9 @@ int main(int argc, char *argv[]) {
       switch (opt) {
       case 'N':
         n = atoi(optarg);
-	if( n==0) {
+        if (n == 0) {
           errx(EXIT_FAILURE, "thread size must be grater than 0");
-	}
+        }
         break;
       case 'l':
         log_file =
