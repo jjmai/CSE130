@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define buffer_size 32768
+#define buffer_size 100000
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -109,6 +109,7 @@ void send_get(int connfd, char *body, char *version, char *request,
   int fd = 0;
   int read_len = 0, r = 0;
   struct stat fs;
+
   copy = (char *)malloc(sizeof(char) * buffer_size);
   read_buffer = (char *)malloc(sizeof(char) * buffer_size);
 
@@ -135,25 +136,28 @@ void send_get(int connfd, char *body, char *version, char *request,
       close(connfd);
     } else {
       long fsize = fs.st_size;
-      while(fsize > buffer_size) {
-         read_buffer = (char*) realloc(read_buffer,buffer_size);
-	 fsize-= buffer_size;
+      // if(fsize > buffer_size) {
+      //   read_buffer = (char*) realloc(read_buffer,fsize);
+      // }
+      // int sends = 0;
+
+      while (fsize > buffer_size) {
+        read_buffer = (char *)realloc(read_buffer, buffer_size);
+        fsize -= buffer_size;
       }
-      
       read_len = read(fd, read_buffer, fsize);
       read_buffer[read_len] = '\0';
 
       // if able to read byte>0
-      if (read_len > 0) {
-        sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version,
-                read_len);
-        // pthread_mutex_unlock(&lock);
-        // sleep(1);
-        send(connfd, copy, strlen(copy), 0);
-        send(connfd, read_buffer, read_len, 0);
-        logging(200, request, body, host, version, read_len);
-      } else {
-        // 0 size byte
+
+      sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version,
+              read_len);
+      send(connfd, copy, strlen(copy), 0);
+      send(connfd, read_buffer, read_len, 0);
+
+      logging(200, request, body, host, version, read_len);
+      // 0 size byte
+      if (fsize == 0) {
         sprintf(copy,
                 "%s 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n",
                 version);
@@ -241,7 +245,7 @@ void send_head(int connfd, char *body, char *version, char *request,
   char *copy;
   copy = (char *)calloc(buffer_size, sizeof(char));
   read_buffer = (char *)calloc(buffer_size, sizeof(char));
-  int valread = 0, r = 0, infile = 0;
+  long valread = 0, r = 0, infile = 0;
   struct stat fs;
 
   memmove(&body[0], &body[1], strlen(body));
@@ -263,7 +267,7 @@ void send_head(int connfd, char *body, char *version, char *request,
       read_buffer = (char *)realloc(read_buffer, fsize);
     }
     valread = read(infile, read_buffer, buffer_size);
-    sprintf(copy, "%s 200 OK\r\nContent-Length: %d\r\n\r\n", version, valread);
+    sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version, valread);
     send(connfd, copy, strlen(copy), 0);
     logging(200, request, body, host, version, valread);
   } else {
@@ -303,7 +307,6 @@ void *handle_connection(void *arg) {
   char host_name[buffer_size];
   char host[buffer_size];
   char *p;
-  int new_line_index = 0;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
 
