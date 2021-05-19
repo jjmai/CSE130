@@ -23,7 +23,6 @@ int log_check = 0;
 // data structure
 
 typedef struct stack {
-  int count;
   int size;
   int front;
   int back;
@@ -74,14 +73,12 @@ int create_listen_socket(uint16_t port) {
 
 // logging into a file
 int log_file;
-// int log_num=0;
 void logging(int num, char *request, char *body, char *host, char *version,
              int content_length) {
   // successful
   if (log_check == 1) {
     int offset = lseek(log_file, 0, SEEK_CUR);
     char nul = '\0';
-    // pthread_mutex_lock(&log_lock);
     char *copy;
     copy = (char *)calloc(buffer_size, sizeof(char));
     if (num == 200 || num == 201) {
@@ -89,14 +86,12 @@ void logging(int num, char *request, char *body, char *host, char *version,
       for (unsigned long i = 0; i < strlen(copy); i++) {
         write(log_file, &nul, 1);
       }
-
       pwrite(log_file, copy, strlen(copy), offset);
     } else {
       // fail
       sprintf(copy, "FAIL\t%s /%s %s\t%d\n", request, body, version, num);
       write(log_file, copy, strlen(copy));
     }
-    // pthread_mutex_unlock(&log_lock);
   }
 }
 
@@ -111,13 +106,10 @@ void send_get(int connfd, char *body, char *version, char *request,
   struct stat fs;
 
   copy = (char *)malloc(sizeof(char) * buffer_size);
-  // read_buffer = (char *)malloc(sizeof(char) * buffer_size);
 
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
   fd = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
-  // r = access(body, R_OK | W_OK);
-
   // if file doesn't exists
   if (fd < 0) {
     sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
@@ -136,18 +128,13 @@ void send_get(int connfd, char *body, char *version, char *request,
       close(connfd);
     } else {
       long fsize = fs.st_size;
-      
       read_buffer = (char *)malloc(sizeof(char) * fsize);
-      
-      read_len = read(fd, read_buffer, fsize); 
-      // read_buffer[read_len] = '\0';
+      read_len = read(fd, read_buffer, fsize);
 
       sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version,
               read_len);
       send(connfd, copy, strlen(copy), 0);
-  
-      send(connfd,read_buffer,read_len,0);
-    
+      send(connfd, read_buffer, read_len, 0);
       logging(200, request, body, host, version, read_len);
       // 0 size byte
       if (fsize == 0) {
@@ -176,11 +163,9 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   long total = 0;
 
   copy = (char *)malloc(sizeof(char) * buffer_size);
-  // read_buffer = (char *)malloc(sizeof(char) * buffer_size);
-
   memmove(&body[0], &body[1], strlen(body));
-
   fd = access(body, F_OK);
+
   // if file doesn't exist, we create one
   if (fd < 0) {
     fd = open(body, O_CREAT | O_WRONLY | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
@@ -192,17 +177,15 @@ void send_put(int connfd, char *body, char *version, char *content_num,
 
       read_buffer = (char *)malloc(sizeof(char) * fsize);
       memory_buffer = (char *)malloc(sizeof(char) * fsize);
+      // while loop to receive all bytes
       while (total < fsize) {
         valread = recv(connfd, read_buffer, fsize, 0);
-       	memcpy(memory_buffer + total, read_buffer, valread);
+        memcpy(memory_buffer + total, read_buffer, valread);
         write_len += write(fd, read_buffer, valread);
-	total += valread;
-        // send(connfd,read_buffer,write_len,0);
+        total += valread;
       }
       send(connfd, memory_buffer, write_len, 0);
       logging(200, request, body, host, version, total);
-      // if able to write to a created file
-
     } else {
       sprintf(copy,
               "%s 500 Internal Server Error\r\nContent-Length: "
@@ -212,7 +195,6 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       logging(500, request, body, host, version, 0);
     }
   } else {
-    // r = access(body, R_OK | W_OK);
     r = stat(body, &fs);
     // if no permission on file
     if (r == -1) {
@@ -235,10 +217,9 @@ void send_put(int connfd, char *body, char *version, char *content_num,
         memory_buffer = (char *)malloc(sizeof(char) * fsize);
         while (total < fsize) {
           valread = recv(connfd, read_buffer, fsize, 0);
-	  memcpy(memory_buffer + total, read_buffer, valread);
+          memcpy(memory_buffer + total, read_buffer, valread);
           write_len += write(fd, read_buffer, valread);
-	  total +=valread;
-          // send(connfd,read_buffer,write_len,0);
+          total += valread;
         }
         send(connfd, memory_buffer, write_len, 0);
         logging(200, request, body, host, version, total);
@@ -262,7 +243,6 @@ void send_head(int connfd, char *body, char *version, char *request,
   char *read_buffer;
   char *copy;
   copy = (char *)malloc(sizeof(char) * buffer_size);
-
   long valread = 0, r = 0, infile = 0;
   struct stat fs;
 
@@ -327,11 +307,8 @@ void *handle_connection(void *arg) {
   char *p;
 
   while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
-
-    printf("Job has started with connection:%d\n\n", connfd);
-
-    write(STDOUT_FILENO, buffer, valread);
-    // write(STDOUT_FILENO,"Hekki\n",6);
+    // printf("Job has started with connection:%d\n\n", connfd);
+    // write(STDOUT_FILENO, buffer, valread);
 
     sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
 
@@ -382,11 +359,8 @@ void *handle_connection(void *arg) {
       send(connfd, copy, strlen(copy), 0);
       logging(501, request, body, host, version, 0);
     }
-    printf("Job has finished with connection: %d \n\n", connfd);
-    // pthread_mutex_unlock(&mutex);
-    // sleep(1);
+    // printf("Job has finished with connection: %d \n\n", connfd);
   }
-
   // when done, close socket
   close(connfd);
   return NULL;
@@ -399,13 +373,12 @@ void *handle_thread(void *arg) {
   while (1) {
     int connfd = 0;
     pthread_mutex_lock(&lock);
-    // dequeue
 
     if (s->size == 0) {
       pthread_cond_wait(&cond1, &lock);
     }
+    // pull connection froms stack
     if (s->size != 0) {
-      s->count++;
       printf("Thread: %d has started working\n", thread);
       connfd = s->shared_buffer[s->front];
       s->size--;
@@ -418,7 +391,6 @@ void *handle_thread(void *arg) {
 
       handle_connection(&connfd);
       printf("Thread: %d has finished. Waiting for new connection\n", thread);
-      s->count--;
     } else {
       pthread_mutex_unlock(&lock);
     }
@@ -457,13 +429,6 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
 
-  //  port = strtouint16(argv[1]);
-  // if (port == 0) {
-  // errx(EXIT_FAILURE, "invalid port number: %s", argv[1]);
-  // }
-  // listenfd = create_listen_socket(port);
-  // get opt here
-
   int n = 4, i = 0;
 
   while (optind < argc) {
@@ -494,7 +459,7 @@ int main(int argc, char *argv[]) {
     } else {
       optind++;
       port = strtouint16(argv[i]);
-      if (port == 0) {
+      if (port == 0 || port < 1024) {
         errx(EXIT_FAILURE, "invalid port number: %s", argv[i]);
       }
     }
@@ -503,33 +468,28 @@ int main(int argc, char *argv[]) {
 
   pthread_t dispatcher[n];
   int worker[n];
-  // pthread_mutex_init(&lock,NULL);
-  // pthread_cond_init(&cond1,NULL);
 
+  // initialize stack for shared buffer
   s = (stack *)malloc(sizeof(stack));
   s->size = 0;
   s->front = 0;
   s->back = 0;
-  s->count = 0;
   s->capacity = 1024;
   s->shared_buffer = (int *)malloc(sizeof(int *) * 1024);
 
+  // thread pool
   for (int j = 0; j < n; j++) {
     worker[j] = j;
     pthread_create(&(dispatcher[j]), NULL, handle_thread, (void *)&worker[j]);
   }
   printf("Waiting for New Connection...\n");
   while (1) {
-    // printf("Waiting for connection...\n");
-    //  if (s->count != n) {
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) {
       warn("accept error");
       continue;
     }
-
     thread_add(connfd);
-    // }
   }
   return EXIT_SUCCESS;
 }
