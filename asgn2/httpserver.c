@@ -13,7 +13,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define buffer_size 100000
+#define buffer_size 16384
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
