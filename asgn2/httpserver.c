@@ -127,7 +127,6 @@ void send_get(int connfd, char *body, char *version, char *request,
     close(connfd);
   } else {
     r = stat(body, &fs);
-
     // no permission on file
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length:10\r\n\r\nForbidden\n",
@@ -137,17 +136,18 @@ void send_get(int connfd, char *body, char *version, char *request,
       close(connfd);
     } else {
       long fsize = fs.st_size;
+      
       read_buffer = (char *)malloc(sizeof(char) * fsize);
-
-      read_len = read(fd, read_buffer, fsize);
-
+      
+      read_len = read(fd, read_buffer, fsize); 
       // read_buffer[read_len] = '\0';
 
       sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version,
               read_len);
       send(connfd, copy, strlen(copy), 0);
-      send(connfd, read_buffer, read_len, 0);
-
+  
+      send(connfd,read_buffer,read_len,0);
+    
       logging(200, request, body, host, version, read_len);
       // 0 size byte
       if (fsize == 0) {
@@ -194,9 +194,9 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       memory_buffer = (char *)malloc(sizeof(char) * fsize);
       while (total < fsize) {
         valread = recv(connfd, read_buffer, fsize, 0);
-        total += valread;
+	memcpy(memory_buffer + total, read_buffer, valread);
         write_len += write(fd, read_buffer, valread);
-        memcpy(memory_buffer + total, read_buffer, valread);
+	total += valread;
         // send(connfd,read_buffer,write_len,0);
       }
       send(connfd, memory_buffer, write_len, 0);
@@ -235,9 +235,9 @@ void send_put(int connfd, char *body, char *version, char *content_num,
         memory_buffer = (char *)malloc(sizeof(char) * fsize);
         while (total < fsize) {
           valread = recv(connfd, read_buffer, fsize, 0);
-          total += valread;
+	  memcpy(memory_buffer + total, read_buffer, valread);
           write_len += write(fd, read_buffer, valread);
-          memcpy(memory_buffer + total, read_buffer, valread);
+	  total +=valread;
           // send(connfd,read_buffer,write_len,0);
         }
         send(connfd, memory_buffer, write_len, 0);
