@@ -337,18 +337,16 @@ void *handle_connection(void *arg) {
       send_get(connfd, body, version, request, host);
     } else if (strcmp(request, "PUT") == 0) {
       p = strstr(buffer, "Content");
-
       if (p == NULL) {
         sprintf(copy,
                 "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
                 version);
         send(connfd, copy, strlen(copy), 0);
         logging(400, request, body, host, version, 0);
+      } else {
+        sscanf(p, "%s %s", content, content_num);
+        send_put(connfd, body, version, content_num, request, host);
       }
-      sscanf(p, "%s %s", content, content_num);
-
-      send_put(connfd, body, version, content_num, request, host);
-
     } else if (strcmp(request, "HEAD") == 0) {
       send_head(connfd, body, version, request, host);
     } else {
@@ -366,6 +364,7 @@ void *handle_connection(void *arg) {
   return NULL;
 }
 
+// handle each thread
 // use shared buffer data structure
 void *handle_thread(void *arg) {
   int thread = *((int *)arg);
@@ -491,5 +490,6 @@ int main(int argc, char *argv[]) {
     }
     thread_add(connfd);
   }
+  // free(s);
   return EXIT_SUCCESS;
 }

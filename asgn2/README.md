@@ -8,7 +8,7 @@
 The purpose of this program is to act a multi-threaded server that is responsible for sending and receiving requests and responses from a client. This program will be able to parse files and save content through users.
 
 # FUNCTION
-httpserver.c - This is the main function program that runs the server that can receive reuqest from a client.
+httpserver.c - This is the main function program that runs the server that can receive request from a client. This program will send back to the client.
 
 # Instruction
 
