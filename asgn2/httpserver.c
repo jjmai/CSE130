@@ -116,7 +116,7 @@ void send_get(int connfd, char *body, char *version, char *request,
   // deletes the / in front
   memmove(&body[0], &body[1], strlen(body));
   fd = open(body, O_RDONLY, S_IRUSR | S_IWUSR);
-  //r = access(body, R_OK | W_OK);
+  // r = access(body, R_OK | W_OK);
 
   // if file doesn't exists
   if (fd < 0) {
@@ -126,8 +126,8 @@ void send_get(int connfd, char *body, char *version, char *request,
     logging(404, request, body, host, version, 0);
     close(connfd);
   } else {
-     r = stat(body, &fs);
-     
+    r = stat(body, &fs);
+
     // no permission on file
     if (r == -1) {
       sprintf(copy, "%s 403 Forbidden\r\nContent-Length:10\r\n\r\nForbidden\n",
@@ -137,13 +137,11 @@ void send_get(int connfd, char *body, char *version, char *request,
       close(connfd);
     } else {
       long fsize = fs.st_size;
-
       read_buffer = (char *)malloc(sizeof(char) * fsize);
 
       read_len = read(fd, read_buffer, fsize);
-      //read_buffer[read_len] = '\0';
 
-      // if able to read byte>0
+      // read_buffer[read_len] = '\0';
 
       sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version,
               read_len);
@@ -170,6 +168,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
               char *request, char *host) {
   char *copy;
   char *read_buffer;
+  char *memory_buffer;
   int fd = 0;
   long write_len = 0, valread = 0, r = 0;
   struct stat fs;
@@ -184,27 +183,26 @@ void send_put(int connfd, char *body, char *version, char *content_num,
   fd = access(body, F_OK);
   // if file doesn't exist, we create one
   if (fd < 0) {
-    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+    fd = open(body, O_CREAT | O_WRONLY | O_TRUNC | O_APPEND, S_IRUSR | S_IWUSR);
     fsize = atoi(content_num);
-
-    read_buffer = (char *)malloc(sizeof(char) * fsize);
-
-    while (total < fsize) {
-      valread = recv(connfd, read_buffer, fsize, 0);
-      total += valread;
-      if (valread == 0) {
-
-        break;
-      }
-      write_len += write(fd, read_buffer, valread);
-    }
-    // if able to write to a created file
-    if (write_len > 0) {
+    if (fsize > 0) {
       sprintf(copy, "%s 201 Created\r\nContent-Length: %ld\r\n\r\n", version,
-              write_len);
+              fsize);
       send(connfd, copy, strlen(copy), 0);
-      send(connfd, read_buffer, write_len, 0);
-      logging(201, request, body, host, version, write_len);
+
+      read_buffer = (char *)malloc(sizeof(char) * fsize);
+      memory_buffer = (char *)malloc(sizeof(char) * fsize);
+      while (total < fsize) {
+        valread = recv(connfd, read_buffer, fsize, 0);
+        total += valread;
+        write_len += write(fd, read_buffer, valread);
+        memcpy(memory_buffer + total, read_buffer, valread);
+        // send(connfd,read_buffer,write_len,0);
+      }
+      send(connfd, memory_buffer, write_len, 0);
+      logging(200, request, body, host, version, total);
+      // if able to write to a created file
+
     } else {
       sprintf(copy,
               "%s 500 Internal Server Error\r\nContent-Length: "
@@ -224,35 +222,28 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       logging(40, request, body, host, version, 0);
       close(connfd);
     } else {
-      fd = open(body, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
-      // while ((valread = recv(connfd, read_buffer, atoi(content_num), 0)) >
-      // 0)
-      // {
+      fd = open(body, O_CREAT | O_WRONLY | O_TRUNC | O_APPEND,
+                S_IRUSR | S_IWUSR);
 
       fsize = atoi(content_num);
-
-      read_buffer = (char *)malloc(sizeof(char) * fsize);
-
-      while (total < fsize) {
-        valread = recv(connfd, read_buffer, fsize, 0);
-        total += valread;
-        if (valread == 0) {
-
-          break;
-        }
-        write_len += write(fd, read_buffer, valread);
-      }
-
-      // if able to write to existing file
-      if (write_len > 0) {
+      if (fsize > 0) {
         sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version,
-                write_len);
-
+                fsize);
         send(connfd, copy, strlen(copy), 0);
-        send(connfd, read_buffer, write_len, 0);
-        logging(200, request, body, host, version, write_len);
+
+        read_buffer = (char *)malloc(sizeof(char) * fsize);
+        memory_buffer = (char *)malloc(sizeof(char) * fsize);
+        while (total < fsize) {
+          valread = recv(connfd, read_buffer, fsize, 0);
+          total += valread;
+          write_len += write(fd, read_buffer, valread);
+          memcpy(memory_buffer + total, read_buffer, valread);
+          // send(connfd,read_buffer,write_len,0);
+        }
+        send(connfd, memory_buffer, write_len, 0);
+        logging(200, request, body, host, version, total);
       } else {
-        // if something faile don program
+
         sprintf(copy,
                 "%s 500 Internal Server Error\r\nContent-Length: "
                 "22\r\n\r\nInternal Server Error\n",
@@ -270,8 +261,8 @@ void send_head(int connfd, char *body, char *version, char *request,
                char *host) {
   char *read_buffer;
   char *copy;
-  copy = (char *)calloc(buffer_size, sizeof(char));
-  read_buffer = (char *)calloc(buffer_size, sizeof(char));
+  copy = (char *)malloc(sizeof(char) * buffer_size);
+
   long valread = 0, r = 0, infile = 0;
   struct stat fs;
 
@@ -289,11 +280,11 @@ void send_head(int connfd, char *body, char *version, char *request,
       logging(404, request, body, host, version, 0);
     }
   } else if (infile > 0) {
-    int fsize = fs.st_size;
-    if (fsize > buffer_size) {
-      read_buffer = (char *)realloc(read_buffer, fsize);
-    }
-    valread = read(infile, read_buffer, buffer_size);
+    r = stat(body, &fs);
+    long fsize = fs.st_size;
+
+    read_buffer = (char *)malloc(sizeof(char) * fsize);
+    valread = read(infile, read_buffer, fsize);
     sprintf(copy, "%s 200 OK\r\nContent-Length: %ld\r\n\r\n", version, valread);
     send(connfd, copy, strlen(copy), 0);
     logging(200, request, body, host, version, valread);
