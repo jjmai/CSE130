@@ -194,7 +194,7 @@ void send_put(int connfd, char *body, char *version, char *content_num,
       memory_buffer = (char *)malloc(sizeof(char) * fsize);
       while (total < fsize) {
         valread = recv(connfd, read_buffer, fsize, 0);
-	memcpy(memory_buffer + total, read_buffer, valread);
+       	memcpy(memory_buffer + total, read_buffer, valread);
         write_len += write(fd, read_buffer, valread);
 	total += valread;
         // send(connfd,read_buffer,write_len,0);
