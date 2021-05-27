@@ -28,7 +28,7 @@ typedef struct cache {
   time_t time;
 } cache;
 
-cache *c;
+cache *c = NULL;
 /**
    Creates a socket for connecting to a server running on the same
    computer, listening on the specified port number.  Returns the
@@ -103,16 +103,49 @@ cache *check_cache(char *tag) {
 }
 
 void write_cache(char *tag, char *response, int length, time_t time) {
-  
-  cache *node = malloc(sizeof(cache));
-  strcpy(node->data, response);
-  strcpy(node->tag, tag);
-  node->next = c;
-  node->time = time;
-  c = node;
-  c->length = length;
-  c->size++;
+  if (length > c->fsize)
+    return;
+  // cache is not full
+  if (c->size < c->max) {
 
+    cache *node = malloc(sizeof(cache));
+    strcpy(node->data, response);
+    strcpy(node->tag, tag);
+    node->next = c;
+    node->time = time;
+    c = node;
+    c->length = length;
+    c->size++;
+  } else if (c->size == c->max) {
+    int lru = 1000000;
+    cache *ptr = NULL;
+    cache *least = NULL;
+    ptr = c;
+    if (c->u == 'L') {
+      while (ptr != NULL) {
+        if (ptr->time < lru) {
+          lru = ptr->time;
+          least = ptr;
+        }
+        ptr = ptr->next;
+      }
+      strcpy(least->data, response);
+      strcpy(least->tag, tag);
+      least->time = time;
+      least->length = length;
+    } else if (c->u == 'F') {
+      while (ptr != NULL) {
+        if (ptr->next == NULL) {
+          least = ptr;
+        }
+        ptr = ptr->next;
+      }
+      strcpy(least->data, response);
+      strcpy(least->tag, tag);
+      least->time = time;
+      least->length = length;
+    }
+  }
   return;
 }
 
@@ -148,30 +181,30 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     valread = recv(serverfd, resp, buffer_size, 0);
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-    //n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
-    //compare new times
+    // compare new times
     if (ret > temp->time) {
       read_cache(temp, resp, ret);
       // printf("%s\n",resp);
     } else {
       send(connfd, temp->data, temp->length, 0);
     }
-    
+
   } else {
 
     valread = send(serverfd, buffer, strlen(buffer), 0);
     valread = recv(serverfd, resp, buffer_size, 0);
-   
+
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-    //n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
-    
+
     write_cache(uri, resp, valread, ret);
     send(connfd, resp, valread, 0);
   }
-  
+
   return;
 }
 
@@ -280,7 +313,7 @@ int main(int argc, char *argv[]) {
   c->max = c_size;
   c->fsize = m_size;
   c->u = u_size;
-  c->length=0;
+  c->length = 0;
 
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
