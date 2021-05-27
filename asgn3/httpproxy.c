@@ -17,7 +17,7 @@
 #define buffer_size 1024
 
 typedef struct cache {
-  char data[buffer_size];
+  char *data;
   int size;
   int length;
   int max;
@@ -105,9 +105,14 @@ cache *check_cache(char *tag) {
 void write_cache(char *tag, char *response, int length, time_t time) {
   if (length > c->fsize)
     return;
+  if(length ==0) {
+     printf("Failure to add 0 size file\n");
+     exit(1);
+  }
+
   // cache is not full
   if (c->size < c->max) {
-
+   
     cache *node = malloc(sizeof(cache));
     strcpy(node->data, response);
     strcpy(node->tag, tag);
@@ -116,6 +121,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     c = node;
     c->length = length;
     c->size++;
+    
   } else if (c->size == c->max) {
     int lru = 1000000;
     cache *ptr = NULL;
@@ -149,11 +155,12 @@ void write_cache(char *tag, char *response, int length, time_t time) {
   return;
 }
 
-void read_cache(cache *temp, char *resp, time_t ret) {
+void read_cache(cache *temp, char *resp,int length, time_t ret) {
   // if newer than stored
-  if (ret >= temp->time) {
-    strcpy(resp, temp->data);
-    temp->time = ret;
+  if (ret > temp->time) {
+    strcpy(temp->data,resp);
+    temp->time=ret;
+    temp->length = length;
   }
 }
 
@@ -185,10 +192,15 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     ret = mktime(&times);
     // compare new times
     if (ret > temp->time) {
-      read_cache(temp, resp, ret);
-      // printf("%s\n",resp);
+      send(serverfd,buffer,strlen(buffer),0);
+      valread = recv(serverfd,resp,buffer_size,0);
+      //write_cache(uri,resp,valread,ret);
+      read_cache(temp,resp,valread,ret);
+      send(connfd,resp,valread,0);
+      printf("new data: %s\n",resp);
     } else {
       send(connfd, temp->data, temp->length, 0);
+      printf("cached data: %s\n",temp->data);
     }
 
   } else {
@@ -203,6 +215,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
     write_cache(uri, resp, valread, ret);
     send(connfd, resp, valread, 0);
+    write(STDOUT_FILENO,resp,strlen(resp));
+    
   }
 
   return;
@@ -251,6 +265,7 @@ void handle_connection(int connfd, int serverfd) {
       handle_put(connfd, serverfd, buffer);
     }
   }
+  
   // when done, close socket
   close(connfd);
   close(serverfd);
@@ -314,6 +329,7 @@ int main(int argc, char *argv[]) {
   c->fsize = m_size;
   c->u = u_size;
   c->length = 0;
+  c->data = (char*)malloc(m_size+1);
 
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
