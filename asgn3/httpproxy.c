@@ -19,6 +19,10 @@
 typedef struct cache {
   char data[buffer_size];
   int size;
+  int length;
+  int max;
+  int fsize;
+  int u;
   char tag[buffer_size];
   struct cache *next;
   time_t time;
@@ -98,18 +102,26 @@ cache *check_cache(char *tag) {
   return NULL;
 }
 
-void write_cache(char *tag, char *response, int length) {
+void write_cache(char *tag, char *response, int length, time_t time) {
+  
   cache *node = malloc(sizeof(cache));
   strcpy(node->data, response);
   strcpy(node->tag, tag);
   node->next = c;
+  node->time = time;
   c = node;
+  c->length = length;
   c->size++;
+
+  return;
 }
 
 void read_cache(cache *temp, char *resp, time_t ret) {
-  strcpy(resp, temp->data);
-  temp->time = ret;
+  // if newer than stored
+  if (ret >= temp->time) {
+    strcpy(resp, temp->data);
+    temp->time = ret;
+  }
 }
 
 void handle_get(int connfd, int serverfd, char *buffer) {
@@ -124,14 +136,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   int valread = 0;
   struct tm times;
   char *r;
+  int n = 0;
+  time_t ret;
 
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
-  // sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name,
-  // host); valread = send(serverfd, copy, strlen(copy), 0); valread =
-  // recv(serverfd, resp, buffer_size, 0); r = strstr(resp, "Last-Modified:");
-  // strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-  // int n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
-  // time_t ret = mktime(&times);
 
   cache *temp = NULL;
   if ((temp = check_cache(uri)) != NULL) {
@@ -140,22 +148,31 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     valread = recv(serverfd, resp, buffer_size, 0);
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-    int n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
-    time_t ret = mktime(&times);
-    if (temp->time >= ret) {
-      read_cache(temp, uri, ret);
+    //n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    ret = mktime(&times);
+    //compare new times
+    if (ret > temp->time) {
+      read_cache(temp, resp, ret);
+      // printf("%s\n",resp);
+    } else {
+      send(connfd, temp->data, temp->length, 0);
     }
-    send(connfd, resp, valread, 0);
-
+    
   } else {
 
     valread = send(serverfd, buffer, strlen(buffer), 0);
-
-    while ((valread = recv(serverfd, copy, buffer_size, 0)) > 0) {
-      write_cache(uri, copy, valread);
-      send(connfd, copy, valread, 0);
-    }
+    valread = recv(serverfd, resp, buffer_size, 0);
+   
+    r = strstr(resp, "Last-Modified:");
+    strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
+    //n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    ret = mktime(&times);
+    
+    write_cache(uri, resp, valread, ret);
+    send(connfd, resp, valread, 0);
   }
+  
+  return;
 }
 
 void handle_put(int connfd, int serverfd, char *buffer) {
@@ -201,7 +218,6 @@ void handle_connection(int connfd, int serverfd) {
       handle_put(connfd, serverfd, buffer);
     }
   }
-
   // when done, close socket
   close(connfd);
   close(serverfd);
@@ -211,9 +227,8 @@ int main(int argc, char *argv[]) {
   int listenfd, serverfd, servernum;
   uint16_t port;
   int opt;
-  int counter = 0;
-  c = (cache *)malloc(sizeof(cache));
-  c->size = 0;
+  int counter = 0, c_size = 3, m_size = 65536, u_size = 'F';
+
   // You will have to modify this and add your own argument parsing
   if (argc < 2) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
@@ -222,11 +237,19 @@ int main(int argc, char *argv[]) {
   int i = 0;
   while (optind < argc) {
     i++;
-    if ((opt = getopt(argc, argv, "N:l:")) != -1) {
+    if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
       switch (opt) {
-      case 'N':
+      case 'c':
+        c_size = atoi(optarg);
+        if (c_size <= 0) {
+          errx(EXIT_FAILURE, "invalid size of cashe input\n");
+        }
         break;
-      case 'l':
+      case 'm':
+        m_size = atoi(optarg);
+        break;
+      case 'u':
+        u_size = 'L';
         break;
       case '?':
         printf("WRONG FLAG\n");
@@ -251,6 +274,13 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+
+  c = (cache *)malloc(sizeof(cache));
+  c->size = 0;
+  c->max = c_size;
+  c->fsize = m_size;
+  c->u = u_size;
+  c->length=0;
 
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
