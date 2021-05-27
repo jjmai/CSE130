@@ -18,10 +18,10 @@
 
 typedef struct cache {
   char data[buffer_size];
-  int time;
   int size;
   char tag[buffer_size];
   struct cache *next;
+  time_t time;
 } cache;
 
 cache *c;
@@ -87,13 +87,29 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
-void write_cache(char *tag, char *data, int size) {
+cache *check_cache(char *tag) {
+  cache *ptr = c;
+  while (ptr != NULL) {
+    if (strcmp(ptr->tag, tag) == 0) {
+      return ptr;
+    }
+    ptr = ptr->next;
+  }
+  return NULL;
+}
+
+void write_cache(char *tag, char *response, int length) {
   cache *node = malloc(sizeof(cache));
-  strcpy(node->data, data);
+  strcpy(node->data, response);
   strcpy(node->tag, tag);
   node->next = c;
   c = node;
   c->size++;
+}
+
+void read_cache(cache *temp, char *resp, time_t ret) {
+  strcpy(resp, temp->data);
+  temp->time = ret;
 }
 
 void handle_get(int connfd, int serverfd, char *buffer) {
@@ -105,38 +121,57 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char host_name[buffer_size];
   char host[buffer_size];
   char resp[buffer_size];
-  sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name,
-         host);
+  int valread = 0;
+  struct tm times;
+  char *r;
 
+  sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
+  // sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name,
+  // host); valread = send(serverfd, copy, strlen(copy), 0); valread =
+  // recv(serverfd, resp, buffer_size, 0); r = strstr(resp, "Last-Modified:");
+  // strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
+  // int n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+  // time_t ret = mktime(&times);
 
-  sprintf(copy, "GET %s %s\r\n%s %s\r\n\r\n", uri,version, host_name,host);
-  printf("%s\n",copy); 
-  int n = send(serverfd,copy,strlen(copy),0);
-  
-  n = recv(serverfd,resp,strlen(copy),0);
-  printf("%s\n",resp);
+  cache *temp = NULL;
+  if ((temp = check_cache(uri)) != NULL) {
+    sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
+    valread = send(serverfd, copy, strlen(copy), 0);
+    valread = recv(serverfd, resp, buffer_size, 0);
+    r = strstr(resp, "Last-Modified:");
+    strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
+    int n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    time_t ret = mktime(&times);
+    if (temp->time >= ret) {
+      read_cache(temp, uri, ret);
+    }
+    send(connfd, resp, valread, 0);
 
- 
-  // sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", body, version, host_name,
-  // host); int n = send(serverfd, copy, strlen(copy), 0);
+  } else {
 
-  // printf("%d\n", n);
+    valread = send(serverfd, buffer, strlen(buffer), 0);
+
+    while ((valread = recv(serverfd, copy, buffer_size, 0)) > 0) {
+      write_cache(uri, copy, valread);
+      send(connfd, copy, valread, 0);
+    }
+  }
 }
 
 void handle_put(int connfd, int serverfd, char *buffer) {
 
-  int fd = 0, n = 0;
+  int fd = 0, n = 0, valread = 0;
   char copy[buffer_size];
 
-  // parse here
+  while (1) {
+    n = recv(connfd, copy, buffer_size, 0);
+  }
 
   n = send(serverfd, buffer, strlen(buffer), 0);
   if (n > 0) {
     n = recv(serverfd, copy, strlen(copy), 0);
     printf("%s\n", copy);
   }
-
-  exit(1);
 }
 
 void handle_connection(int connfd, int serverfd) {
@@ -169,15 +204,15 @@ void handle_connection(int connfd, int serverfd) {
 
   // when done, close socket
   close(connfd);
+  close(serverfd);
 }
 
 int main(int argc, char *argv[]) {
-  int listenfd, serverfd;
+  int listenfd, serverfd, servernum;
   uint16_t port;
   int opt;
   int counter = 0;
   c = (cache *)malloc(sizeof(cache));
-  c->time = 0;
   c->size = 0;
   // You will have to modify this and add your own argument parsing
   if (argc < 2) {
@@ -203,7 +238,7 @@ int main(int argc, char *argv[]) {
     } else {
       optind++;
       port = strtouint16(argv[i]);
-      
+
       if (port == 0 || port < 1024) {
         errx(EXIT_FAILURE, "invalid port number: %s", argv[i]);
       }
@@ -211,7 +246,7 @@ int main(int argc, char *argv[]) {
         listenfd = create_listen_socket(port);
         counter++;
       } else if (counter == 1) {
-        serverfd = create_client_socket(port);
+        servernum = port;
         counter++;
       }
     }
@@ -220,6 +255,7 @@ int main(int argc, char *argv[]) {
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
     int connfd = accept(listenfd, NULL, NULL);
+    serverfd = create_client_socket(servernum);
     if (connfd < 0 || serverfd < 0) {
       warn("accept error");
       continue;
