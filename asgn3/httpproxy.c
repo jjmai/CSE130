@@ -116,9 +116,8 @@ cache *check_cache(char *tag) {
 void write_cache(char *tag, char *response, int length, time_t time) {
   if (length > fsize)
     return;
-  if (length == 0) {
-    printf("Failure to add 0 size file\n");
-    exit(1);
+  if (size == 0 && max == 0) {
+    return;
   }
 
   // cache is not full
@@ -133,13 +132,13 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     size++;
 
   } else if (size == max) {
-    
+
     cache *ptr = NULL;
-    cache *least= NULL;
+    cache *least = NULL;
     ptr = c;
     time_t lru = ptr->time;
     if (u == 'L') {
-      while (ptr != NULL) {	
+      while (ptr != NULL) {
         if (ptr->time <= lru) {
           lru = ptr->time;
           least = ptr;
@@ -206,10 +205,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       // write_cache(uri,resp,valread,ret);
       read_cache(temp, resp, valread, ret);
       send(connfd, resp, valread, 0);
-      printf("new data: %s\n", resp);
+      //    printf("new data: %s\n", resp);
     } else {
       send(connfd, temp->data, temp->length, 0);
-      printf("cached data: %s\n", temp->data);
+      //  printf("cached data: %s\n", temp->data);
     }
 
   } else {
@@ -224,25 +223,47 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
     write_cache(uri, resp, valread, ret);
     send(connfd, resp, valread, 0);
-    write(STDOUT_FILENO, resp, strlen(resp));
+    // write(STDOUT_FILENO, resp, strlen(resp));
   }
-  // print_cache();
+  print_cache();
   return;
 }
 
 void handle_put(int connfd, int serverfd, char *buffer) {
 
-  int fd = 0, n = 0, valread = 0;
+  int n = 0, valread = 0,total=0;
+  char copy[buffer_size];
+  char content[fsize];
+  char content_num[fsize];
+  char *memory_buffer;
+  char *p;
+  memory_buffer = (char*)malloc(sizeof(char) * fsize);
+  
+  //parse
+  valread = send(serverfd,buffer,strlen(buffer),0);
+
+  p= strstr(buffer,"Content");
+  sscanf(p,"%s %s",content,content_num);
+  while(total < atoi(content_num)) {
+    valread = recv(connfd,copy,buffer_size,0);
+    total+=valread;
+    send(serverfd,copy,valread,0);    
+  }  
+  
+  if (total > 0) {
+    n = recv(serverfd, copy, buffer_size, 0); 
+    n = send(connfd, copy, n, 0);
+  }
+}
+
+void handle_head(int connfd,int serverfd,char *buffer) {
+  int n=0,valread=0;
   char copy[buffer_size];
 
-  while (1) {
-    n = recv(connfd, copy, buffer_size, 0);
-  }
-
-  n = send(serverfd, buffer, strlen(buffer), 0);
-  if (n > 0) {
-    n = recv(serverfd, copy, strlen(copy), 0);
-    printf("%s\n", copy);
+  valread = send(serverfd,buffer,strlen(buffer),0);
+  if(valread >0) {
+    n = recv(serverfd,copy,buffer_size,0);
+    n = send(connfd,copy,n,0);
   }
 }
 
@@ -297,12 +318,15 @@ int main(int argc, char *argv[]) {
       switch (opt) {
       case 'c':
         max = atoi(optarg);
-        if (max <= 0) {
+        if (max < 0) {
           errx(EXIT_FAILURE, "invalid size of cache input\n");
         }
         break;
       case 'm':
         fsize = atoi(optarg);
+        if (fsize < 0) {
+          errx(EXIT_FAILURE, "invalid size of file\n");
+        }
         break;
       case 'u':
         u = 'L';
