@@ -124,6 +124,8 @@ void write_cache(char *tag, char *response, int length, time_t time) {
   if (size < max) {
     cache *node = malloc(sizeof(cache));
     if (node != NULL) {
+      //maybe allocate more data space
+      node->data = malloc(fsize);
       strcpy(node->data, response);
       strcpy(node->tag, tag);
       node->next = c;
@@ -131,6 +133,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       c = node;
       c->length = length;
       size++;
+      
     }
 
   } else if (size == max) {
@@ -179,7 +182,7 @@ void read_cache(cache *temp, char *resp, int length, time_t ret) {
 
 void handle_get(int connfd, int serverfd, char *buffer) {
   struct stat fs;
-  char copy[buffer_size];
+  char copy[fsize];
   char request[buffer_size];
   char uri[buffer_size];
   char version[buffer_size];
@@ -187,9 +190,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char host[buffer_size];
   char content[buffer_size];
   char content_num[buffer_size];
-  char resp[buffer_size];
+  char resp[fsize];
   int valread = 0;
   struct tm times;
+  memset(&times,0,sizeof(struct tm));
   char *r, *p;
   int n = 0, total = 0;
   time_t ret;
@@ -218,24 +222,36 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     }
 
   } else {
+
     valread = send(serverfd, buffer, strlen(buffer), 0);
-    valread = recv(serverfd, resp, buffer_size, 0);
-    p = strstr(resp, "Content");
-    sscanf(p, "%s %s", content, content_num);
+    valread = recv(serverfd, resp, fsize, 0);
+    printf("%s\n",resp);
+
+    // p = strstr(resp, "Content");
+    // sscanf(p, "%s %s", content, content_num);
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
     // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
     write_cache(uri, resp, valread, ret);
 
-    send(connfd,resp,valread,0);
-   // while(1) { 
-     // total += send(connfd,resp,1,0);
-     // if(total == valread) {
-       // break;
-     // }
-    //}    
-    // print_cache();
+    n = send(connfd, resp, valread, 0);
+    // write(STDOUT_FILENO,resp,n);
+    // printf("%d\n",n);
+    // size_t nn = sizeof(resp);
+
+    // while(nn >0) {
+    // n = send(connfd,resp,nn,0);
+    // nn-=n;
+    // }
+    // printf("%lu\n",sizeof(resp));
+    // while(1) {
+    // total += send(connfd,resp,1,0);
+    // if(total == valread) {
+    // break;
+    // }
+    //}
+    print_cache();
   }
   return;
 }
@@ -280,7 +296,7 @@ void handle_head(int connfd, int serverfd, char *buffer) {
 
 void handle_connection(int connfd, int serverfd) {
   // do something
-  char buffer[buffer_size];
+  char buffer[fsize];
   char request[buffer_size];
   char body[buffer_size];
   char version[buffer_size];
@@ -292,7 +308,7 @@ void handle_connection(int connfd, int serverfd) {
   int valread = 0;
   char *p;
 
-  while ((valread = recv(connfd, buffer, buffer_size, 0)) > 0) {
+  while ((valread = recv(connfd, buffer, fsize, 0)) > 0) {
     write(STDOUT_FILENO, buffer, valread);
 
     sscanf(buffer, "%s %s %s %s %s", request, body, version, host_name, host);
