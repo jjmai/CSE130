@@ -123,13 +123,15 @@ void write_cache(char *tag, char *response, int length, time_t time) {
   // cache is not full
   if (size < max) {
     cache *node = malloc(sizeof(cache));
-    strcpy(node->data, response);
-    strcpy(node->tag, tag);
-    node->next = c;
-    node->time = time;
-    c = node;
-    c->length = length;
-    size++;
+    if (node != NULL) {
+      strcpy(node->data, response);
+      strcpy(node->tag, tag);
+      node->next = c;
+      node->time = time;
+      c = node;
+      c->length = length;
+      size++;
+    }
 
   } else if (size == max) {
 
@@ -145,19 +147,22 @@ void write_cache(char *tag, char *response, int length, time_t time) {
         }
         ptr = ptr->next;
       }
-      strcpy(least->data, response);
-      strcpy(least->tag, tag);
-      least->time = time;
-      least->length = length;
+      if (least != NULL) {
+        strcpy(least->data, response);
+        strcpy(least->tag, tag);
+        least->time = time;
+        least->length = length;
+      }
     } else if (u == 'F') {
       while (ptr->next != NULL) {
         ptr = ptr->next;
       }
-
-      strcpy(ptr->data, response);
-      strcpy(ptr->tag, tag);
-      ptr->time = time;
-      ptr->length = length;
+      if (ptr != NULL) {
+        strcpy(ptr->data, response);
+        strcpy(ptr->tag, tag);
+        ptr->time = time;
+        ptr->length = length;
+      }
     }
   }
   return;
@@ -180,11 +185,13 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char version[buffer_size];
   char host_name[buffer_size];
   char host[buffer_size];
+  char content[buffer_size];
+  char content_num[buffer_size];
   char resp[buffer_size];
   int valread = 0;
   struct tm times;
-  char *r;
-  int n = 0;
+  char *r, *p;
+  int n = 0, total = 0;
   time_t ret;
 
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
@@ -202,68 +209,72 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     if (ret > temp->time) {
       send(serverfd, buffer, strlen(buffer), 0);
       valread = recv(serverfd, resp, buffer_size, 0);
+
       // write_cache(uri,resp,valread,ret);
       read_cache(temp, resp, valread, ret);
       send(connfd, resp, valread, 0);
-      //    printf("new data: %s\n", resp);
     } else {
       send(connfd, temp->data, temp->length, 0);
-      //  printf("cached data: %s\n", temp->data);
     }
 
   } else {
-
     valread = send(serverfd, buffer, strlen(buffer), 0);
     valread = recv(serverfd, resp, buffer_size, 0);
-
+    p = strstr(resp, "Content");
+    sscanf(p, "%s %s", content, content_num);
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
     // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
-
     write_cache(uri, resp, valread, ret);
-    send(connfd, resp, valread, 0);
-    // write(STDOUT_FILENO, resp, strlen(resp));
+
+    send(connfd,resp,valread,0);
+   // while(1) { 
+     // total += send(connfd,resp,1,0);
+     // if(total == valread) {
+       // break;
+     // }
+    //}    
+    // print_cache();
   }
-  print_cache();
   return;
 }
 
 void handle_put(int connfd, int serverfd, char *buffer) {
 
-  int n = 0, valread = 0,total=0;
+  int n = 0, valread = 0, total = 0;
   char copy[buffer_size];
   char content[fsize];
   char content_num[fsize];
   char *memory_buffer;
   char *p;
-  memory_buffer = (char*)malloc(sizeof(char) * fsize);
-  
-  //parse
-  valread = send(serverfd,buffer,strlen(buffer),0);
+  memory_buffer = (char *)malloc(sizeof(char) * fsize);
 
-  p= strstr(buffer,"Content");
-  sscanf(p,"%s %s",content,content_num);
-  while(total < atoi(content_num)) {
-    valread = recv(connfd,copy,buffer_size,0);
-    total+=valread;
-    send(serverfd,copy,valread,0);    
-  }  
-  
+  // parse
+  valread = send(serverfd, buffer, strlen(buffer), 0);
+
+  p = strstr(buffer, "Content");
+  sscanf(p, "%s %s", content, content_num);
+  while (total < atoi(content_num)) {
+    valread = recv(connfd, copy, buffer_size, 0);
+    total += valread;
+    send(serverfd, copy, valread, 0);
+  }
+
   if (total > 0) {
-    n = recv(serverfd, copy, buffer_size, 0); 
+    n = recv(serverfd, copy, buffer_size, 0);
     n = send(connfd, copy, n, 0);
   }
 }
 
-void handle_head(int connfd,int serverfd,char *buffer) {
-  int n=0,valread=0;
+void handle_head(int connfd, int serverfd, char *buffer) {
+  int n = 0, valread = 0;
   char copy[buffer_size];
 
-  valread = send(serverfd,buffer,strlen(buffer),0);
-  if(valread >0) {
-    n = recv(serverfd,copy,buffer_size,0);
-    n = send(connfd,copy,n,0);
+  valread = send(serverfd, buffer, strlen(buffer), 0);
+  if (valread > 0) {
+    n = recv(serverfd, copy, buffer_size, 0);
+    n = send(connfd, copy, n, 0);
   }
 }
 
@@ -292,9 +303,10 @@ void handle_connection(int connfd, int serverfd) {
       p = strstr(buffer, "Content");
       sscanf(p, "%s %s", content, content_num);
       handle_put(connfd, serverfd, buffer);
+    } else if (strcmp(request, "HEAD") == 0) {
+      handle_head(connfd, serverfd, buffer);
     }
   }
-
   // when done, close socket
   close(connfd);
   close(serverfd);
