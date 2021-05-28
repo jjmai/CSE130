@@ -15,20 +15,19 @@
 #include <time.h>
 
 #define buffer_size 1024
+int max = 3, fsize = 65536, size = 0;
+char u = 'F';
 
 typedef struct cache {
   char *data;
-  int size;
-  int length;
-  int max;
-  int fsize;
-  int u;
   char tag[buffer_size];
   struct cache *next;
+  int length;
   time_t time;
 } cache;
 
 cache *c = NULL;
+
 /**
    Creates a socket for connecting to a server running on the same
    computer, listening on the specified port number.  Returns the
@@ -91,7 +90,19 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
+void print_cache() {
+  cache *ptr = c;
+  while (ptr != NULL) {
+    printf("%s-> %d\n", ptr->tag, size);
+    ptr = ptr->next;
+  }
+  return;
+}
+
 cache *check_cache(char *tag) {
+  if (c == NULL) {
+    return NULL;
+  }
   cache *ptr = c;
   while (ptr != NULL) {
     if (strcmp(ptr->tag, tag) == 0) {
@@ -103,16 +114,15 @@ cache *check_cache(char *tag) {
 }
 
 void write_cache(char *tag, char *response, int length, time_t time) {
-  if (length > c->fsize)
+  if (length > fsize)
     return;
-  if(length ==0) {
-     printf("Failure to add 0 size file\n");
-     exit(1);
+  if (length == 0) {
+    printf("Failure to add 0 size file\n");
+    exit(1);
   }
 
   // cache is not full
-  if (c->size < c->max) {
-   
+  if (size < max) {
     cache *node = malloc(sizeof(cache));
     strcpy(node->data, response);
     strcpy(node->tag, tag);
@@ -120,16 +130,17 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     node->time = time;
     c = node;
     c->length = length;
-    c->size++;
+    size++;
+
+  } else if (size == max) {
     
-  } else if (c->size == c->max) {
-    int lru = 1000000;
     cache *ptr = NULL;
-    cache *least = NULL;
+    cache *least= NULL;
     ptr = c;
-    if (c->u == 'L') {
-      while (ptr != NULL) {
-        if (ptr->time < lru) {
+    time_t lru = ptr->time;
+    if (u == 'L') {
+      while (ptr != NULL) {	
+        if (ptr->time <= lru) {
           lru = ptr->time;
           least = ptr;
         }
@@ -139,27 +150,25 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       strcpy(least->tag, tag);
       least->time = time;
       least->length = length;
-    } else if (c->u == 'F') {
-      while (ptr != NULL) {
-        if (ptr->next == NULL) {
-          least = ptr;
-        }
+    } else if (u == 'F') {
+      while (ptr->next != NULL) {
         ptr = ptr->next;
       }
-      strcpy(least->data, response);
-      strcpy(least->tag, tag);
-      least->time = time;
-      least->length = length;
+
+      strcpy(ptr->data, response);
+      strcpy(ptr->tag, tag);
+      ptr->time = time;
+      ptr->length = length;
     }
   }
   return;
 }
 
-void read_cache(cache *temp, char *resp,int length, time_t ret) {
+void read_cache(cache *temp, char *resp, int length, time_t ret) {
   // if newer than stored
   if (ret > temp->time) {
-    strcpy(temp->data,resp);
-    temp->time=ret;
+    strcpy(temp->data, resp);
+    temp->time = ret;
     temp->length = length;
   }
 }
@@ -192,15 +201,15 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     ret = mktime(&times);
     // compare new times
     if (ret > temp->time) {
-      send(serverfd,buffer,strlen(buffer),0);
-      valread = recv(serverfd,resp,buffer_size,0);
-      //write_cache(uri,resp,valread,ret);
-      read_cache(temp,resp,valread,ret);
-      send(connfd,resp,valread,0);
-      printf("new data: %s\n",resp);
+      send(serverfd, buffer, strlen(buffer), 0);
+      valread = recv(serverfd, resp, buffer_size, 0);
+      // write_cache(uri,resp,valread,ret);
+      read_cache(temp, resp, valread, ret);
+      send(connfd, resp, valread, 0);
+      printf("new data: %s\n", resp);
     } else {
       send(connfd, temp->data, temp->length, 0);
-      printf("cached data: %s\n",temp->data);
+      printf("cached data: %s\n", temp->data);
     }
 
   } else {
@@ -215,10 +224,9 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
     write_cache(uri, resp, valread, ret);
     send(connfd, resp, valread, 0);
-    write(STDOUT_FILENO,resp,strlen(resp));
-    
+    write(STDOUT_FILENO, resp, strlen(resp));
   }
-
+  // print_cache();
   return;
 }
 
@@ -265,7 +273,7 @@ void handle_connection(int connfd, int serverfd) {
       handle_put(connfd, serverfd, buffer);
     }
   }
-  
+
   // when done, close socket
   close(connfd);
   close(serverfd);
@@ -275,7 +283,7 @@ int main(int argc, char *argv[]) {
   int listenfd, serverfd, servernum;
   uint16_t port;
   int opt;
-  int counter = 0, c_size = 3, m_size = 65536, u_size = 'F';
+  int counter = 0;
 
   // You will have to modify this and add your own argument parsing
   if (argc < 2) {
@@ -288,16 +296,16 @@ int main(int argc, char *argv[]) {
     if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
       switch (opt) {
       case 'c':
-        c_size = atoi(optarg);
-        if (c_size <= 0) {
-          errx(EXIT_FAILURE, "invalid size of cashe input\n");
+        max = atoi(optarg);
+        if (max <= 0) {
+          errx(EXIT_FAILURE, "invalid size of cache input\n");
         }
         break;
       case 'm':
-        m_size = atoi(optarg);
+        fsize = atoi(optarg);
         break;
       case 'u':
-        u_size = 'L';
+        u = 'L';
         break;
       case '?':
         printf("WRONG FLAG\n");
@@ -323,13 +331,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  c = (cache *)malloc(sizeof(cache));
-  c->size = 0;
-  c->max = c_size;
-  c->fsize = m_size;
-  c->u = u_size;
-  c->length = 0;
-  c->data = (char*)malloc(m_size+1);
+  c = NULL;
 
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
