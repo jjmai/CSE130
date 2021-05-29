@@ -233,8 +233,11 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     sscanf(resp, "%s %s", version, code);
     // file dont exist
     if (strcmp(code, "404") == 0) {
-      send(connfd, resp, strlen(resp), 0);
-      close(connfd);
+      //send(connfd, resp, strlen(resp), 0);
+       sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
+            version);
+    send(connfd, copy, strlen(copy), 0);
+
     } else {
       p = strstr(resp, "Content");
       if (p == NULL) {
