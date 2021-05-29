@@ -193,12 +193,16 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char content_num[buffer_size];
   char resp[fsize];
   char code[buffer_size];
+  char time_array[buffer_size];
   char *memory_buffer;
   memory_buffer = (char *)malloc(sizeof(char) * fsize);
-  int valread = 0;
+  long valread = 0;
   struct tm times;
   memset(&times, 0, sizeof(struct tm));
-  char *r, *p;
+  char *r;
+  char *p;
+  r = (char*)malloc(sizeof(char)* fsize);
+  p = (char*)malloc(sizeof(char)* fsize);
   int n = 0, total = 0;
   time_t ret;
 
@@ -233,10 +237,9 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     sscanf(resp, "%s %s", version, code);
     // file dont exist
     if (strcmp(code, "404") == 0) {
-      //send(connfd, resp, strlen(resp), 0);
-       sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
-            version);
-    send(connfd, copy, strlen(copy), 0);
+      sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
+              version);
+      send(connfd, copy, strlen(copy), 0);
 
     } else {
       p = strstr(resp, "Content");
@@ -245,22 +248,29 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         exit(1);
       }
       sscanf(p, "%s %s", content, content_num);
+      long cont_num = atoi(content_num);
 
-      valread = send(serverfd, buffer, strlen(buffer), 0);
-      while (total < atoi(content_num)) {
-        valread = recv(serverfd, resp, fsize, 0);
+      send(serverfd, buffer, strlen(buffer), 0);
+
+      while (total < cont_num) {
+        valread = recv(serverfd, copy, fsize, 0);
+        // memcpy(memory_buffer + total, resp, valread);
+        n = send(connfd, copy, valread, 0);
         total += valread;
       }
-      //  memcpy(memory_buffer + total, resp, valread);
-      // total += valread;
 
       r = strstr(resp, "Last-Modified:");
+      if(r== NULL) {
+        printf("Error getting date\n");
+	exit(1);
+      }
+      // segfault here
       strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-      // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
-      ret = mktime(&times);
-      write_cache(uri, resp, total, ret);
 
-      n = send(connfd, resp, total, 0);
+      //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+      ret = mktime(&times);
+      write_cache(uri, memory_buffer, total, ret);
+      // n = send(connfd, memory_buffer, total, 0);
       // write(STDOUT_FILENO,resp,n);
     }
   }
