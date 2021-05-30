@@ -195,7 +195,6 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char code[buffer_size];
   char time_array[buffer_size];
   char *memory_buffer;
-  memory_buffer = (char *)malloc(sizeof(char) * fsize);
   long valread = 0;
   struct tm times;
   memset(&times, 0, sizeof(struct tm));
@@ -252,14 +251,15 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
       sscanf(p, "%s %s", content, content_num);
       long cont_num = atoi(content_num);
-
+      memory_buffer = (char *)malloc(sizeof(char) * cont_num);
       send(serverfd, buffer, strlen(buffer), 0);
-
       while (total < cont_num) {
-        valread = recv(serverfd, copy, fsize, 0);
-         memcpy(memory_buffer + total, copy, valread);
+        valread = recv(serverfd, copy, fsize, 0);	
+	//seg fault here
+        memcpy(memory_buffer + total, copy, valread);
         n = send(connfd, copy, valread, 0);
         total += valread;
+	
       }
 
       r = strstr(resp, "Last-Modified:");
