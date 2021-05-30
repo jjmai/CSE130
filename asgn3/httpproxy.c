@@ -213,12 +213,13 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
     valread = send(serverfd, copy, strlen(copy), 0);
     valread = recv(serverfd, resp, fsize, 0);
+    
     r = strstr(resp, "Last-Modified:");
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
     // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
     // compare new times
-
+  
     if (ret > temp->time) {
       send(serverfd, buffer, strlen(buffer), 0);
       valread = recv(serverfd, resp, fsize, 0);
@@ -226,7 +227,9 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       read_cache(temp, resp, valread, ret);
       send(connfd, resp, valread, 0);
     } else {
-      send(connfd, temp->data, temp->length, 0);
+      
+     int nn =  send(connfd, temp->data, temp->length, 0); 
+     
     }
 
   } else {
@@ -254,7 +257,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);
-        // memcpy(memory_buffer + total, resp, valread);
+         memcpy(memory_buffer + total, copy, valread);
         n = send(connfd, copy, valread, 0);
         total += valread;
       }
@@ -264,7 +267,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         printf("Error getting date\n");
 	exit(1);
       }
-      // segfault here
+    
       strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
 
       //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
