@@ -22,7 +22,7 @@ typedef struct cache {
   char *data;
   char tag[buffer_size];
   struct cache *next;
-  int length;
+  long length;
   time_t time;
 } cache;
 
@@ -94,7 +94,7 @@ void print_cache() {
   if (size > 0) {
     cache *ptr = c;
     while (ptr != NULL) {
-      printf("%s-> %d\n", ptr->tag, ptr->length);
+      printf("%s-> %ld\n", ptr->tag, ptr->length);
       ptr = ptr->next;
     }
   }
@@ -251,12 +251,12 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
       sscanf(p, "%s %s", content, content_num);
       long cont_num = atoi(content_num);
-      memory_buffer = (char *)malloc(sizeof(char) * cont_num);
+      //memory_buffer = (char *)malloc(sizeof(char) * cont_num);
       send(serverfd, buffer, strlen(buffer), 0);
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);	
 	//seg fault here
-        memcpy(memory_buffer + total, copy, valread);
+        //memcpy(memory_buffer + total, copy, valread);
         n = send(connfd, copy, valread, 0);
         total += valread;
 	
@@ -267,12 +267,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         printf("Error getting date\n");
 	exit(1);
       }
-    
       strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-
       //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
       ret = mktime(&times);
-      write_cache(uri, memory_buffer, total, ret);
+      write_cache(uri, copy, total, ret);
       // n = send(connfd, memory_buffer, total, 0);
       // write(STDOUT_FILENO,resp,n);
     }
