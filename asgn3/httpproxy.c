@@ -214,6 +214,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     valread = recv(serverfd, resp, fsize, 0);
     
     r = strstr(resp, "Last-Modified:");
+    if(r==NULL) {
+      printf("error on strstr\n");
+      exit(1);
+    }
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
     // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
@@ -253,6 +257,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       long cont_num = atoi(content_num);
       //memory_buffer = (char *)malloc(sizeof(char) * cont_num);
       send(serverfd, buffer, strlen(buffer), 0);
+      
+
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);	
 	//seg fault here
@@ -261,7 +267,6 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         total += valread;
 	
       }
-
       r = strstr(resp, "Last-Modified:");
       if(r== NULL) {
         printf("Error getting date\n");
@@ -271,7 +276,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
       ret = mktime(&times);
       write_cache(uri, copy, total, ret);
-      // n = send(connfd, memory_buffer, total, 0);
+     // n = send(connfd, memory_buffer, total, 0);
       // write(STDOUT_FILENO,resp,n);
     }
   }
