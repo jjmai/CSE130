@@ -97,7 +97,7 @@ void print_cache() {
     cache *ptr = c;
     while (ptr != NULL) {
       printf("Cache Contains\n -------------------\n");
-      printf("%s-> %ld\n\n", ptr->tag, ptr->length);
+      printf("uri: %s\nLength: %ld\n\n", ptr->tag, ptr->length);
       ptr = ptr->next;
     }
   }
@@ -195,7 +195,7 @@ void read_cache(cache *temp, char *resp, int length, time_t ret) {
     strcpy(temp->data, resp);
     temp->time = ret;
     temp->length = length;
-    //temp->lru = lru_time;
+    // temp->lru = lru_time;
   }
 }
 
@@ -289,7 +289,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
       strncat(memory_buffer, copy, total);
       read_cache(temp, memory_buffer, total + q, ret);
-      temp->lru=lru_time;
+      temp->lru = lru_time;
       send(connfd, memory_buffer, valread + q, 0);
 
     } else {
@@ -298,46 +298,44 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     }
 
   } else {
-    // send HEAD?
-    sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
-    valread = send(serverfd, copy, strlen(copy), 0);
-    valread = recv(serverfd, resp, fsize, 0);
-    sscanf(resp, "%s %s", version, code);
-    // file dont exist
+    
+    send(serverfd, buffer, strlen(buffer), 0);
+
+    while (1) {
+      valread = recv(serverfd, memory_buffer + q, 1, 0);
+      q += valread;
+      p = strstr(memory_buffer, "\r\n\r\n");
+      if (p != NULL) {
+        send(connfd, memory_buffer, q, 0);
+        break;
+      }
+    }
+    r = strstr(memory_buffer, "Last-Modified:");
+    if (r == NULL) {
+      printf("Error getting date\n");
+      exit(1);
+    }
+    strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
+    //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
+    ret = mktime(&times);
+
+    sscanf(memory_buffer, "%s %s", version, code);
+    // start here with time modification
     if (error_check(connfd, code, version) == 1) {
-      p = strstr(resp, "Content");
+      p = strstr(memory_buffer, "Content");
       if (p == NULL) {
+        printf("bad respone here\n");
         exit(1);
       }
       sscanf(p, "%s %s", content, content_num);
       cont_num = atoi(content_num);
-      send(serverfd, buffer, strlen(buffer), 0);
-
-      while (1) {
-        valread = recv(serverfd, memory_buffer + q, 1, 0);
-        q += valread;
-        p = strstr(memory_buffer, "\r\n\r\n");
-        if (p != NULL) {
-          send(connfd, memory_buffer, q, 0);
-          break;
-        }
-      }
 
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);
         n = send(connfd, copy, valread, 0);
         total += valread;
-       
       }
 
-      r = strstr(resp, "Last-Modified:");
-      if (r == NULL) {
-        printf("Error getting date\n");
-        exit(1);
-      }
-      strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-      //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
-      ret = mktime(&times);
       if (total + q <= fsize) {
         strncat(memory_buffer, copy, total);
         write_cache(uri, memory_buffer, total + q, ret);
