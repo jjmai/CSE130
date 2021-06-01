@@ -183,12 +183,33 @@ void write_cache(char *tag, char *response, int length, time_t time) {
 }
 
 void read_cache(cache *temp, char *resp, int length, time_t ret) {
-  // if newer than stored
+  if (length > fsize)
+    return;
+
   if (ret > temp->time) {
     strcpy(temp->data, resp);
     temp->time = ret;
     temp->length = length;
   }
+}
+
+int error_check(int connfd, char *code, char *version) {
+  // file dont exist
+  char copy[fsize];
+  if (strcmp(code, "404") == 0) {
+    sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
+            version);
+    send(connfd, copy, strlen(copy), 0);
+    return 0;
+
+  } else if (strcmp(code, "400") == 0) {
+    sprintf(copy,
+            "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
+            version);
+    send(connfd, copy, strlen(copy), 0);
+    return 0;
+  }
+  return 1;
 }
 
 void handle_get(int connfd, int serverfd, char *buffer) {
@@ -205,7 +226,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char code[buffer_size];
   char time_array[buffer_size];
   char *memory_buffer;
-  long valread = 0,total=0;
+  long valread = 0, total = 0, cont_num = 0;
   struct tm times;
   memset(&times, 0, sizeof(struct tm));
   char *r;
@@ -214,6 +235,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   p = (char *)malloc(sizeof(char) * fsize);
   int n = 0;
   time_t ret;
+  int q = 0;
+  memory_buffer = (char *)malloc(sizeof(char) * fsize);
 
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
 
@@ -232,13 +255,35 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     // n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
     ret = mktime(&times);
     // compare new times
-
     if (ret > temp->time) {
       send(serverfd, buffer, strlen(buffer), 0);
-      valread = recv(serverfd, resp, fsize, 0);
-      // write_cache(uri,resp,valread,ret);
-      read_cache(temp, resp, valread, ret);
-      send(connfd, resp, valread, 0);
+      while (1) {
+        valread = recv(serverfd, memory_buffer + q, 1, 0);
+        q += valread;
+        p = strstr(memory_buffer, "\r\n\r\n");
+        if (p != NULL) {
+          send(connfd, memory_buffer, q, 0);
+          break;
+        }
+      }
+
+      p = strstr(resp, "Content");
+      if (p == NULL) {
+        exit(1);
+      }
+      sscanf(p, "%s %s", content, content_num);
+      cont_num = atoi(content_num);
+
+      while (total < cont_num) {
+        valread = recv(serverfd, copy, fsize, 0);
+        n = send(connfd, copy, valread, 0);
+        total += valread;
+      }
+      
+      strncat(memory_buffer, copy, total);
+      read_cache(temp, memory_buffer, total+q, ret);
+      send(connfd, memory_buffer, valread+q, 0);
+
     } else {
       int nn = send(connfd, temp->data, temp->length, 0);
     }
@@ -250,31 +295,29 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     valread = recv(serverfd, resp, fsize, 0);
     sscanf(resp, "%s %s", version, code);
     // file dont exist
-    if (strcmp(code, "404") == 0) {
-      sprintf(copy, "%s 404 Not Found\r\nContent-Length: 10\r\n\r\nNot Found\n",
-              version);
-      send(connfd, copy, strlen(copy), 0);
-
-    } else if (strcmp(code, "400") == 0) {
-      sprintf(copy,
-              "%s 400 Bad Request\r\nContent-Length: 12\r\n\r\nBad Request\n",
-              version);
-      send(connfd, copy, strlen(copy), 0);
-
-    } else {
+    if (error_check(connfd, code, version) == 1) {
       p = strstr(resp, "Content");
       if (p == NULL) {
         exit(1);
       }
       sscanf(p, "%s %s", content, content_num);
-      long cont_num = atoi(content_num);
+      cont_num = atoi(content_num);
       send(serverfd, buffer, strlen(buffer), 0);
-      //memory_buffer = (char*)malloc(sizeof(char)*cont_num); 
+
+      while (1) {
+        valread = recv(serverfd, memory_buffer + q, 1, 0);
+        q += valread;
+        p = strstr(memory_buffer, "\r\n\r\n");
+        if (p != NULL) {
+          send(connfd, memory_buffer, q, 0);
+          break;
+        }
+      }
+
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);
         n = send(connfd, copy, valread, 0);
         total += valread;
-	printf("%ld\n",total);
       }
 
       r = strstr(resp, "Last-Modified:");
@@ -285,9 +328,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
       //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
       ret = mktime(&times);
-      write_cache(uri, copy, total, ret);
-      // n = send(connfd, memory_buffer, total, 0);
-      // write(STDOUT_FILENO,resp,n);
+      if (total + q <= fsize) {
+        strncat(memory_buffer, copy,total);
+        write_cache(uri, memory_buffer, total + q, ret);
+      }
     }
   }
   print_cache();
