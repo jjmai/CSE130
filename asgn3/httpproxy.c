@@ -205,14 +205,14 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char code[buffer_size];
   char time_array[buffer_size];
   char *memory_buffer;
-  long valread = 0;
+  long valread = 0,total=0;
   struct tm times;
   memset(&times, 0, sizeof(struct tm));
   char *r;
   char *p;
   r = (char *)malloc(sizeof(char) * fsize);
   p = (char *)malloc(sizeof(char) * fsize);
-  int n = 0, total = 0;
+  int n = 0;
   time_t ret;
 
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
@@ -268,19 +268,15 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
       sscanf(p, "%s %s", content, content_num);
       long cont_num = atoi(content_num);
-      // memory_buffer = (char *)malloc(sizeof(char) * cont_num);
       send(serverfd, buffer, strlen(buffer), 0);
-
+      //memory_buffer = (char*)malloc(sizeof(char)*cont_num); 
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);
-        if (valread == 0) {
-          close(serverfd);
-          break;
-        }
-        //   memcpy(memory_buffer + total, copy, valread);
         n = send(connfd, copy, valread, 0);
         total += valread;
+	printf("%ld\n",total);
       }
+
       r = strstr(resp, "Last-Modified:");
       if (r == NULL) {
         printf("Error getting date\n");
