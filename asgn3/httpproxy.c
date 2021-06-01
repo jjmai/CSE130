@@ -15,7 +15,7 @@
 #include <time.h>
 
 #define buffer_size 1024
-int max = 3, fsize = 65536, size = 0, pos = 0;
+int max = 3, fsize = 65536, size = 0, pos = 0, lru_time = 0;
 char u = 'F';
 
 typedef struct cache {
@@ -24,6 +24,7 @@ typedef struct cache {
   struct cache *next;
   long length;
   time_t time;
+  int lru;
   int position;
 } cache;
 
@@ -95,7 +96,8 @@ void print_cache() {
   if (size > 0) {
     cache *ptr = c;
     while (ptr != NULL) {
-      printf("%s-> %ld\n", ptr->tag, ptr->length);
+      printf("Cache Contains\n -------------------\n");
+      printf("%s-> %ld\n\n", ptr->tag, ptr->length);
       ptr = ptr->next;
     }
   }
@@ -129,6 +131,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     node->position = 0;
     node->next = NULL;
     node->time = 0;
+    node->lru = 0;
     node->length = 0;
     if (node != NULL) {
       node->data = malloc(fsize);
@@ -138,6 +141,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       node->time = time;
       node->position = pos++;
       node->length = length;
+      node->lru = lru_time;
       c = node;
       size++;
     }
@@ -147,11 +151,11 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     cache *ptr = NULL;
     cache *least = NULL;
     ptr = c;
-    time_t lru = ptr->time;
+    int lru = ptr->lru;
     if (u == 'L') {
       while (ptr != NULL) {
-        if (ptr->time <= lru) {
-          lru = ptr->time;
+        if (ptr->lru <= lru) {
+          lru = ptr->lru;
           least = ptr;
         }
         ptr = ptr->next;
@@ -161,6 +165,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
         strcpy(least->tag, tag);
         least->time = time;
         least->length = length;
+        least->lru = lru_time;
       }
     } else if (u == 'F') {
       while (ptr != NULL) {
@@ -190,6 +195,7 @@ void read_cache(cache *temp, char *resp, int length, time_t ret) {
     strcpy(temp->data, resp);
     temp->time = ret;
     temp->length = length;
+    //temp->lru = lru_time;
   }
 }
 
@@ -240,6 +246,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
 
+  lru_time++;
   cache *temp = NULL;
   if ((temp = check_cache(uri)) != NULL) {
     sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
@@ -279,12 +286,14 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         n = send(connfd, copy, valread, 0);
         total += valread;
       }
-      
+
       strncat(memory_buffer, copy, total);
-      read_cache(temp, memory_buffer, total+q, ret);
-      send(connfd, memory_buffer, valread+q, 0);
+      read_cache(temp, memory_buffer, total + q, ret);
+      temp->lru=lru_time;
+      send(connfd, memory_buffer, valread + q, 0);
 
     } else {
+      temp->lru = lru_time;
       int nn = send(connfd, temp->data, temp->length, 0);
     }
 
@@ -318,6 +327,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         valread = recv(serverfd, copy, fsize, 0);
         n = send(connfd, copy, valread, 0);
         total += valread;
+       
       }
 
       r = strstr(resp, "Last-Modified:");
@@ -329,7 +339,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
       ret = mktime(&times);
       if (total + q <= fsize) {
-        strncat(memory_buffer, copy,total);
+        strncat(memory_buffer, copy, total);
         write_cache(uri, memory_buffer, total + q, ret);
       }
     }
