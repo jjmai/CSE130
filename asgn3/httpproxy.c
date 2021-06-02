@@ -121,7 +121,8 @@ cache *check_cache(char *tag) {
   return NULL;
 }
 
-void write_cache(char *tag, char *response, int length, time_t time) {
+void write_cache(char *tag, char *request, char *response, long length,
+                 time_t time) {
   if (length > fsize)
     return;
   if (size == 0 && max == 0) {
@@ -140,8 +141,9 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       node->data = malloc(fsize);
       memset(node->data, 0, fsize);
       // memcpy??
-      // memcpy(node->data,response,length);
-      strcpy(node->data, response);
+      strcpy(node->request, request);
+      memcpy(node->data, response, length);
+      // strcpy(node->data, response);
       strcpy(node->tag, tag);
       node->next = c;
       node->time = time;
@@ -167,7 +169,8 @@ void write_cache(char *tag, char *response, int length, time_t time) {
         ptr = ptr->next;
       }
       if (least != NULL) {
-        strcpy(least->data, response);
+	strcpy(least->request,request);
+        memcpy(least->data, response,length);
         strcpy(least->tag, tag);
         least->time = time;
         least->length = length;
@@ -185,7 +188,8 @@ void write_cache(char *tag, char *response, int length, time_t time) {
         ptr = ptr->next;
       }
       if (least != NULL) {
-        strcpy(least->data, response);
+	strcpy(least->request,request);
+        memcpy(least->data, response,length);
         strcpy(least->tag, tag);
         least->time = time;
         least->length = length;
@@ -195,12 +199,15 @@ void write_cache(char *tag, char *response, int length, time_t time) {
   return;
 }
 
-void read_cache(cache *temp, char *resp, int length, time_t ret) {
+void read_cache(cache *temp, char *request, char *resp, long length,
+                time_t ret) {
   if (length > fsize)
     return;
 
   if (ret > temp->time) {
-    strcpy(temp->data, resp);
+    strcpy(temp->request, request);
+    memcpy(temp->data, resp, length);
+    // strcpy(temp->data, resp);
     temp->time = ret;
     temp->length = length;
     // temp->lru = lru_time;
@@ -302,13 +309,14 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         total += valread;
       }
       // this might get affected with binary
-      strncat(memory_buffer, copy, total);
-      read_cache(temp, memory_buffer, total + q, ret);
+      // strncat(memory_buffer, copy, total);
+      read_cache(temp, memory_buffer, copy, total, ret);
       temp->lru = lru_time;
-      send(connfd, memory_buffer, valread + q, 0);
+      // send(connfd, memory_buffer, valread + q, 0);
 
     } else {
       temp->lru = lru_time;
+      int nnn = send(connfd, temp->request, strlen(temp->request), 0);
       int nn = send(connfd, temp->data, temp->length, 0);
     }
 
@@ -352,8 +360,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
 
       if (total + q <= fsize) {
-        strncat(memory_buffer, copy, total);
-        write_cache(uri, memory_buffer, total + q, ret);
+        // strncat(memory_buffer, copy, total);
+        write_cache(uri, memory_buffer, copy, total, ret);
       }
     }
   }
