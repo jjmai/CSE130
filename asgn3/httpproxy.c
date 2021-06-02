@@ -95,11 +95,13 @@ int create_listen_socket(uint16_t port) {
 void print_cache() {
   if (size > 0) {
     cache *ptr = c;
+    printf("Cache Contains\n -------------------\n");
+
     while (ptr != NULL) {
-      printf("Cache Contains\n -------------------\n");
       printf("uri: %s\nLength: %ld\n\n", ptr->tag, ptr->length);
       ptr = ptr->next;
     }
+    free(ptr);
   }
   return;
 }
@@ -135,6 +137,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     node->length = 0;
     if (node != NULL) {
       node->data = malloc(fsize);
+      memset(node->data, 0, fsize);
       strcpy(node->data, response);
       strcpy(node->tag, tag);
       node->next = c;
@@ -169,18 +172,20 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       }
     } else if (u == 'F') {
       while (ptr != NULL) {
+       // printf("This is the position: %s %d\n\n", ptr->tag, ptr->position);
         if (ptr->position == 0) {
           ptr->position = max - 1;
-          break;
+          least = ptr;
+        } else {
+          ptr->position--;
         }
-        ptr->position--;
         ptr = ptr->next;
       }
-      if (ptr != NULL) {
-        strcpy(ptr->data, response);
-        strcpy(ptr->tag, tag);
-        ptr->time = time;
-        ptr->length = length;
+      if (least != NULL) {
+        strcpy(least->data, response);
+        strcpy(least->tag, tag);
+        least->time = time;
+        least->length = length;
       }
     }
   }
@@ -197,6 +202,13 @@ void read_cache(cache *temp, char *resp, int length, time_t ret) {
     temp->length = length;
     // temp->lru = lru_time;
   }
+}
+
+void free_cache() {
+  while (c != NULL) {
+    free(c->data);
+  }
+  free(c);
 }
 
 int error_check(int connfd, char *code, char *version) {
@@ -243,7 +255,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   time_t ret;
   int q = 0;
   memory_buffer = (char *)malloc(sizeof(char) * fsize);
-
+  memset(memory_buffer, 0, sizeof(char) * fsize);
   sscanf(buffer, "%s %s %s %s %s", request, uri, version, host_name, host);
 
   lru_time++;
@@ -298,7 +310,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     }
 
   } else {
-    
+
     send(serverfd, buffer, strlen(buffer), 0);
 
     while (1) {
@@ -348,7 +360,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
 void handle_put(int connfd, int serverfd, char *buffer) {
 
-  int n = 0, valread = 0, total = 0;
+  long n = 0, valread = 0, total = 0;
   char copy[buffer_size];
   char content[fsize];
   char content_num[fsize];
@@ -363,16 +375,17 @@ void handle_put(int connfd, int serverfd, char *buffer) {
   if (p == NULL) {
     exit(1);
   }
+
   sscanf(p, "%s %s", content, content_num);
   while (total < atoi(content_num)) {
     valread = recv(connfd, copy, buffer_size, 0);
     total += valread;
     send(serverfd, copy, valread, 0);
   }
-
-  if (total > 0) {
-    n = recv(serverfd, copy, total, 0);
-    n = send(connfd, copy, n, 0);
+  while (n < total) {
+    valread = recv(serverfd, memory_buffer, fsize, 0);
+    send(connfd, memory_buffer, valread, 0);
+    n += valread;
   }
 }
 
@@ -494,5 +507,6 @@ int main(int argc, char *argv[]) {
     }
     handle_connection(connfd, serverfd);
   }
+  free_cache();
   return EXIT_SUCCESS;
 }
