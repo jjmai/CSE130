@@ -20,6 +20,7 @@ char u = 'F';
 
 typedef struct cache {
   char *data;
+  char request[buffer_size];
   char tag[buffer_size];
   struct cache *next;
   long length;
@@ -138,6 +139,8 @@ void write_cache(char *tag, char *response, int length, time_t time) {
     if (node != NULL) {
       node->data = malloc(fsize);
       memset(node->data, 0, fsize);
+      // memcpy??
+      // memcpy(node->data,response,length);
       strcpy(node->data, response);
       strcpy(node->tag, tag);
       node->next = c;
@@ -172,7 +175,7 @@ void write_cache(char *tag, char *response, int length, time_t time) {
       }
     } else if (u == 'F') {
       while (ptr != NULL) {
-       // printf("This is the position: %s %d\n\n", ptr->tag, ptr->position);
+        // printf("This is the position: %s %d\n\n", ptr->tag, ptr->position);
         if (ptr->position == 0) {
           ptr->position = max - 1;
           least = ptr;
@@ -298,7 +301,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         n = send(connfd, copy, valread, 0);
         total += valread;
       }
-
+      // this might get affected with binary
       strncat(memory_buffer, copy, total);
       read_cache(temp, memory_buffer, total + q, ret);
       temp->lru = lru_time;
