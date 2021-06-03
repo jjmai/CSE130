@@ -250,13 +250,13 @@ int error_check(int connfd, int serverfd, char *code, int cont_num) {
   } else if (strcmp(code, "400") == 0) {
     n = recv(serverfd, copy, cont_num, 0);
     send(connfd, copy, n, 0);
+    close(connfd);
     return 0;
   }
   return 1;
 }
 
 void handle_get(int connfd, int serverfd, char *buffer) {
-  struct stat fs;
   char copy[fsize];
   char request[buffer_size];
   char uri[buffer_size];
@@ -267,7 +267,6 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   char content_num[buffer_size];
   char resp[fsize];
   char code[buffer_size];
-  char time_array[buffer_size];
   char *memory_buffer;
   long valread = 0, total = 0, cont_num = 0;
   struct tm times;
@@ -321,8 +320,6 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       sscanf(memory_buffer, "%s %s", version, code);
       if (error_check(connfd, serverfd, code, cont_num) == 1) {
 
-        sscanf(p, "%s %s", content, content_num);
-        cont_num = atoi(content_num);
         while (total < cont_num) {
           valread = recv(serverfd, copy, fsize, 0);
           n = send(connfd, copy, valread, 0);
@@ -337,8 +334,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
     } else {
       temp->lru = lru_time;
-      int nnn = send(connfd, temp->request, strlen(temp->request), 0);
-      int nn = send(connfd, temp->data, temp->length, 0);
+      send(connfd, temp->request, strlen(temp->request), 0);
+      send(connfd, temp->data, temp->length, 0);
     }
 
   } else {
@@ -384,7 +381,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
     }
   }
-  print_cache();
+  //  print_cache();
   return;
 }
 
@@ -405,13 +402,13 @@ void handle_put(int connfd, int serverfd, char *buffer) {
   if (p == NULL) {
     exit(1);
   }
-
   sscanf(p, "%s %s", content, content_num);
   while (total < atoi(content_num)) {
     valread = recv(connfd, copy, buffer_size, 0);
     total += valread;
     send(serverfd, copy, valread, 0);
   }
+
   while (n < total) {
     valread = recv(serverfd, memory_buffer, fsize, 0);
     send(connfd, memory_buffer, valread, 0);
@@ -467,7 +464,7 @@ void handle_connection(int connfd, int serverfd) {
   }
   // when done, close socket
   close(connfd);
-  close(serverfd);
+  // close(serverfd);
 }
 
 int main(int argc, char *argv[]) {
@@ -520,6 +517,7 @@ int main(int argc, char *argv[]) {
         counter++;
       } else if (counter == 1) {
         servernum = port;
+        serverfd = create_client_socket(servernum);
         counter++;
       }
     }
@@ -530,7 +528,7 @@ int main(int argc, char *argv[]) {
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
     int connfd = accept(listenfd, NULL, NULL);
-    serverfd = create_client_socket(servernum);
+    // serverfd = create_client_socket(servernum);
     if (connfd < 0 || serverfd < 0) {
       warn("accept error");
       continue;
