@@ -18,6 +18,7 @@
 int max = 3, fsize = 65536, size = 0, pos = 0, lru_time = 0;
 char u = 'F';
 
+// data structure for cache
 typedef struct cache {
   char *data;
   char request[buffer_size];
@@ -93,6 +94,7 @@ int create_listen_socket(uint16_t port) {
   return listenfd;
 }
 
+// printing cache
 void print_cache() {
   if (size > 0) {
     cache *ptr = c;
@@ -108,6 +110,7 @@ void print_cache() {
   return;
 }
 
+// deletes node when full
 void deleteNode(char *target) {
   cache *temp = c, *prev = NULL;
   if (temp != NULL && strcmp(temp->tag, target) == 0) {
@@ -127,6 +130,8 @@ void deleteNode(char *target) {
   return;
 }
 
+// checks if a node with same uri exists
+// returns ptr to node
 cache *check_cache(char *tag) {
   if (c == NULL) {
     return NULL;
@@ -141,6 +146,7 @@ cache *check_cache(char *tag) {
   return NULL;
 }
 
+// write to cache
 void write_cache(char *tag, char *request, char *response, long length,
                  time_t time) {
   if (length > fsize)
@@ -151,6 +157,7 @@ void write_cache(char *tag, char *request, char *response, long length,
 
   // cache is not full
   if (size < max) {
+    // create a new node
     cache *node = malloc(sizeof(cache));
 
     node->position = 0;
@@ -172,12 +179,13 @@ void write_cache(char *tag, char *request, char *response, long length,
       c = node;
       size++;
     }
-
+    // full cache
   } else if (size == max) {
 
     cache *ptr = NULL;
     cache *least = NULL;
     ptr = c;
+    // for LRU
     if (u == 'L') {
       int lru = ptr->lru;
       while (ptr != NULL) {
@@ -195,6 +203,7 @@ void write_cache(char *tag, char *request, char *response, long length,
         least->length = length;
         least->lru = lru_time;
       }
+      // for FIFO
     } else if (u == 'F') {
       while (ptr != NULL) {
         if (ptr->position == 0) {
@@ -217,9 +226,10 @@ void write_cache(char *tag, char *request, char *response, long length,
   return;
 }
 
+// copy and replace with same URI
 void read_cache(cache *temp, char *request, char *resp, long length,
                 time_t ret) {
-  if (length > fsize) {
+  if (length > fsize || max == 0) {
     return;
   }
 
@@ -231,6 +241,7 @@ void read_cache(cache *temp, char *request, char *resp, long length,
   }
 }
 
+// free
 void free_cache() {
   while (c != NULL) {
     free(c->data);
@@ -238,6 +249,7 @@ void free_cache() {
   free(c);
 }
 
+// for 400 and 404
 int error_check(int connfd, int serverfd, char *code, int cont_num) {
   // file dont exist
   char copy[fsize];
@@ -250,12 +262,13 @@ int error_check(int connfd, int serverfd, char *code, int cont_num) {
   } else if (strcmp(code, "400") == 0) {
     n = recv(serverfd, copy, cont_num, 0);
     send(connfd, copy, n, 0);
-    close(connfd);
+    // close(connfd);
     return 0;
   }
   return 1;
 }
 
+// for GET requests
 void handle_get(int connfd, int serverfd, char *buffer) {
   char copy[fsize];
   char request[buffer_size];
@@ -284,6 +297,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
 
   lru_time++;
   cache *temp = NULL;
+  // if exists in cache
   if ((temp = check_cache(uri)) != NULL) {
     sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
     valread = send(serverfd, copy, strlen(copy), 0);
@@ -296,8 +310,10 @@ void handle_get(int connfd, int serverfd, char *buffer) {
     }
     strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
     ret = mktime(&times);
+    // if new modified time
     if (ret > temp->time) {
       send(serverfd, buffer, strlen(buffer), 0);
+      // receives only header
       while (1) {
         valread = recv(serverfd, memory_buffer + q, 1, 0);
         q += valread;
@@ -316,10 +332,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       cont_num = atoi(content_num);
 
       sscanf(memory_buffer, "%s %s", version, code);
-      // check for 400 or 404 error
-      sscanf(memory_buffer, "%s %s", version, code);
       if (error_check(connfd, serverfd, code, cont_num) == 1) {
-
+        // receives all content
         while (total < cont_num) {
           valread = recv(serverfd, copy, fsize, 0);
           n = send(connfd, copy, valread, 0);
@@ -332,15 +346,16 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         }
         temp->lru = lru_time;
       }
+      // no new time
     } else {
       temp->lru = lru_time;
       send(connfd, temp->request, strlen(temp->request), 0);
       send(connfd, temp->data, temp->length, 0);
     }
-
+    // not in cache
   } else {
-
     send(serverfd, buffer, strlen(buffer), 0);
+    // receives header only
     while (1) {
       valread = recv(serverfd, memory_buffer + q, 1, 0);
       q += valread;
@@ -367,9 +382,8 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         errx(EXIT_FAILURE, "Failed on retrieving date\n");
       }
       strptime(r, "Last-Modified: %a, %d %b %Y %T GMT ", &times);
-      //    n = strftime(r, buffer_size, "%a, %d %b %Y %T", &times);
       ret = mktime(&times);
-
+      // receives all contents
       while (total < cont_num) {
         valread = recv(serverfd, copy, fsize, 0);
         n = send(connfd, copy, valread, 0);
@@ -381,10 +395,11 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
     }
   }
-  //  print_cache();
+  print_cache();
   return;
 }
 
+// for PUT requests
 void handle_put(int connfd, int serverfd, char *buffer) {
 
   long n = 0, valread = 0, total = 0;
@@ -395,12 +410,11 @@ void handle_put(int connfd, int serverfd, char *buffer) {
   char *p;
   memory_buffer = (char *)malloc(sizeof(char) * fsize);
 
-  // parse
   valread = send(serverfd, buffer, strlen(buffer), 0);
 
   p = strstr(buffer, "Content");
   if (p == NULL) {
-    exit(1);
+    errx(EXIT_FAILURE, "failed on content\n");
   }
   sscanf(p, "%s %s", content, content_num);
   while (total < atoi(content_num)) {
@@ -416,6 +430,7 @@ void handle_put(int connfd, int serverfd, char *buffer) {
   }
 }
 
+// for HEAD requests
 void handle_head(int connfd, int serverfd, char *buffer) {
   int n = 0, valread = 0;
   char copy[buffer_size];
@@ -464,7 +479,7 @@ void handle_connection(int connfd, int serverfd) {
   }
   // when done, close socket
   close(connfd);
-  // close(serverfd);
+  close(serverfd);
 }
 
 int main(int argc, char *argv[]) {
@@ -517,18 +532,16 @@ int main(int argc, char *argv[]) {
         counter++;
       } else if (counter == 1) {
         servernum = port;
-        serverfd = create_client_socket(servernum);
+        //  serverfd = create_client_socket(servernum);
         counter++;
       }
     }
   }
 
-  c = NULL;
-
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
     int connfd = accept(listenfd, NULL, NULL);
-    // serverfd = create_client_socket(servernum);
+    serverfd = create_client_socket(servernum);
     if (connfd < 0 || serverfd < 0) {
       warn("accept error");
       continue;

@@ -5,7 +5,7 @@
 #  Makefile for httpserver program
 #
 #  make
-#  ---
+#  -----------------------------
 
 CFLAGS = -Wall -Wextra -Wpedantic -Wshadow -std=c11
 CC = clang $(CFLAGS)
@@ -24,6 +24,4 @@ clean		:
 format		:
 		clang-format -i -style=file *.c
 
-valgrind	:
-		MEMCHECK 
 
