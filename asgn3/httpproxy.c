@@ -30,6 +30,7 @@ typedef struct cache {
   int position;
 } cache;
 
+// global cache
 cache *c = NULL;
 
 /**
@@ -184,7 +185,6 @@ void write_cache(char *tag, char *request, char *response, long length,
       node->lru = lru_time;
       c = node;
       size++;
-      // print here
     }
     // full cache
   } else if (size == max) {
@@ -239,7 +239,8 @@ void read_cache(cache *temp, char *request, char *resp, long length,
   if (length > fsize || max == 0) {
     return;
   }
-
+  // only replace if time modified
+  // is newer
   if (ret > temp->time) {
     strcpy(temp->request, request);
     memcpy(temp->data, resp, length);
@@ -256,7 +257,7 @@ void free_cache() {
   free(c);
 }
 
-// for 400 and 404
+// for 400 and 404 error recv/send
 int error_check(int connfd, int serverfd, char *code, int cont_num) {
   // file dont exist
   char copy[buffer_size];
@@ -275,7 +276,6 @@ int error_check(int connfd, int serverfd, char *code, int cont_num) {
       send(connfd, copy, n, 0);
       total += n;
     }
-    // close(connfd);
     return 0;
   }
   return 1;
@@ -312,6 +312,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
   cache *temp = NULL;
   // if exists in cache
   if ((temp = check_cache(uri)) != NULL) {
+    // send head to retrieve Date
     sprintf(copy, "HEAD %s %s\r\n%s %s\r\n\r\n", uri, version, host_name, host);
     valread = send(serverfd, copy, strlen(copy), 0);
     valread = recv(serverfd, resp, fsize, 0);
@@ -407,7 +408,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
     }
   }
-  print_cache();
+  // print_cache();
   return;
 }
 
@@ -429,6 +430,7 @@ void handle_put(int connfd, int serverfd, char *buffer) {
     errx(EXIT_FAILURE, "failed on content\n");
   }
   sscanf(p, "%s %s", content, content_num);
+  // recv and send
   while (total < atoi(content_num)) {
     valread = recv(connfd, copy, buffer_size, 0);
     total += valread;
@@ -505,7 +507,6 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
 
-  // all in whie loop and then do optin. save port nubmers
   while (optind < argc) {
     if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
       switch (opt) {
@@ -545,6 +546,7 @@ int main(int argc, char *argv[]) {
       }
     }
   }
+
   listenfd = create_listen_socket(clientnum);
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
