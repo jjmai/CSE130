@@ -499,7 +499,6 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
 
-  int i = 0;
   //all in whie loop and then do optin. save port nubmers
   while (optind < argc) {
     if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
@@ -529,7 +528,7 @@ int main(int argc, char *argv[]) {
       port = strtouint16(argv[optind]);
       optind++;
       if (port == 0 || port < 1024) {
-        errx(EXIT_FAILURE, "invalid port number: %s", argv[i]);
+        errx(EXIT_FAILURE, "invalid port number: %s", argv[optind]);
       }
       if (counter == 0) {
 	clientnum = port;
