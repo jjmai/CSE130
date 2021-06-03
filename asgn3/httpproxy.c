@@ -252,16 +252,22 @@ void free_cache() {
 // for 400 and 404
 int error_check(int connfd, int serverfd, char *code, int cont_num) {
   // file dont exist
-  char copy[fsize];
-  int n = 0;
+  char copy[buffer_size];
+  int n = 0, total = 0;
   if (strcmp(code, "404") == 0) {
-    n = recv(serverfd, copy, cont_num, 0);
-    send(connfd, copy, n, 0);
+    while (total < cont_num) {
+      n = recv(serverfd, copy, buffer_size, 0);
+      send(connfd, copy, n, 0);
+      total += n;
+    }
     return 0;
 
   } else if (strcmp(code, "400") == 0) {
-    n = recv(serverfd, copy, cont_num, 0);
-    send(connfd, copy, n, 0);
+    while (total < cont_num) {
+      n = recv(serverfd, copy, buffer_size, 0);
+      send(connfd, copy, n, 0);
+      total += n;
+    }
     // close(connfd);
     return 0;
   }
@@ -395,7 +401,7 @@ void handle_get(int connfd, int serverfd, char *buffer) {
       }
     }
   }
-  print_cache();
+  //print_cache();
   return;
 }
 
@@ -483,7 +489,7 @@ void handle_connection(int connfd, int serverfd) {
 }
 
 int main(int argc, char *argv[]) {
-  int listenfd, serverfd, servernum;
+  int listenfd, serverfd, servernum,clientnum;
   uint16_t port;
   int opt;
   int counter = 0;
@@ -494,8 +500,8 @@ int main(int argc, char *argv[]) {
   }
 
   int i = 0;
+  //all in whie loop and then do optin. save port nubmers
   while (optind < argc) {
-    i++;
     if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
       switch (opt) {
       case 'c':
@@ -519,25 +525,22 @@ int main(int argc, char *argv[]) {
       default:
         break;
       }
-      i++;
     } else {
+      port = strtouint16(argv[optind]);
       optind++;
-      port = strtouint16(argv[i]);
-
       if (port == 0 || port < 1024) {
         errx(EXIT_FAILURE, "invalid port number: %s", argv[i]);
       }
       if (counter == 0) {
-        listenfd = create_listen_socket(port);
+	clientnum = port;
         counter++;
       } else if (counter == 1) {
         servernum = port;
-        //  serverfd = create_client_socket(servernum);
         counter++;
       }
     }
   }
-
+  listenfd = create_listen_socket(clientnum);
   while (1) {
     write(STDOUT_FILENO, "Waiting for Connection...\n", 26);
     int connfd = accept(listenfd, NULL, NULL);
