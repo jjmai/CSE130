@@ -17,3 +17,5 @@ httpproxy.c - This is the main function that runs the proxy server. It connects 
 To compile, type 'make'
 
 To run the program, type ./httpproxy [any # greater than 1024] [any # greater than 1024] OPTIONAL [-c INT] [-u] [-m INT]
+
+The expected output will no errors in sending and receiving between clients

@@ -111,15 +111,19 @@ void print_cache() {
 }
 
 // deletes node when full
-void deleteNode(char *target) {
-  cache *temp = c, *prev = NULL;
+void deleteNode(cache **head, char *target) {
+  cache *temp = *head, *prev = NULL;
+
   if (temp != NULL && strcmp(temp->tag, target) == 0) {
-    c = temp->next;
+    *head = temp->next;
     free(temp);
+    size--;
+    pos--;
     return;
   }
+
   while (temp != NULL && strcmp(temp->tag, target) != 0) {
-    prev = NULL;
+    prev = temp;
     temp = temp->next;
   }
   if (temp == NULL) {
@@ -127,6 +131,8 @@ void deleteNode(char *target) {
   }
   prev->next = temp->next;
   free(temp);
+  size--;
+  pos--;
   return;
 }
 
@@ -178,6 +184,7 @@ void write_cache(char *tag, char *request, char *response, long length,
       node->lru = lru_time;
       c = node;
       size++;
+      // print here
     }
     // full cache
   } else if (size == max) {
@@ -345,12 +352,11 @@ void handle_get(int connfd, int serverfd, char *buffer) {
           n = send(connfd, copy, valread, 0);
           total += valread;
         }
+        // only cache if less than fsize
         if (total < fsize) {
           read_cache(temp, memory_buffer, copy, total, ret);
-        } else {
-          deleteNode(uri);
+          temp->lru = lru_time;
         }
-        temp->lru = lru_time;
       }
       // no new time
     } else {
@@ -395,13 +401,13 @@ void handle_get(int connfd, int serverfd, char *buffer) {
         n = send(connfd, copy, valread, 0);
         total += valread;
       }
-
+      // only cache is less than fsize else skip
       if (total <= fsize) {
         write_cache(uri, memory_buffer, copy, total, ret);
       }
     }
   }
-  //print_cache();
+  print_cache();
   return;
 }
 
@@ -489,7 +495,7 @@ void handle_connection(int connfd, int serverfd) {
 }
 
 int main(int argc, char *argv[]) {
-  int listenfd, serverfd, servernum,clientnum;
+  int listenfd, serverfd, servernum, clientnum;
   uint16_t port;
   int opt;
   int counter = 0;
@@ -499,7 +505,7 @@ int main(int argc, char *argv[]) {
     errx(EXIT_FAILURE, "wrong arguments: %s port_num", argv[0]);
   }
 
-  //all in whie loop and then do optin. save port nubmers
+  // all in whie loop and then do optin. save port nubmers
   while (optind < argc) {
     if ((opt = getopt(argc, argv, "c:m:u")) != -1) {
       switch (opt) {
@@ -531,7 +537,7 @@ int main(int argc, char *argv[]) {
         errx(EXIT_FAILURE, "invalid port number: %s", argv[optind]);
       }
       if (counter == 0) {
-	clientnum = port;
+        clientnum = port;
         counter++;
       } else if (counter == 1) {
         servernum = port;
