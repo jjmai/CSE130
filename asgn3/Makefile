@@ -13,10 +13,10 @@ MEMCHECK = valgrind --leak-check=full
 
 all		:	httpproxy
 
-httpserver	:	httpproxy.o
-		$(CC) -o httproxy httpproxy.o -g -lpthread
+httpproxy	:	httpproxy.o
+		$(CC) -o httpproxy httpproxy.o -g 
 
-httpserver.o	:	httpproxy.c
+httpproxy.o	:	httpproxy.c
 		$(CC) -c httpproxy.c -g
 
 clean		:
